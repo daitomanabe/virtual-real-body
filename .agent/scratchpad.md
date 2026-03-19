@@ -126,3 +126,19 @@
 - [ ] `python/analyzers/particle_analyzer.py` — フロー → パーティクル spawn データ
 - [x] `python/main.py` — エントリポイント（CLI args）
 - [x] `python/requirements.txt`
+
+## Iteration #5 — Ralph Coordination
+
+### Current State
+- `python:core-transport` is complete enough for imports; the remaining unblocked runtime task is `python:analyzers`.
+- The builder needs to replace analyzer stubs with actual payload shaping and OSC event mapping before `python.built` can legitimately unblock Swift work.
+- Relevant prior fixes still apply: use `python3` for import verification, and create/inspect files with safe quoted edits rather than shell heredocs that expand.
+
+### Delegation Decision
+- Re-emit `plan.ready` as the single routing event for Python Builder, with payload focused on analyzer implementation and event mapping.
+- Keep Ralph coordination-only in this iteration; no direct implementation work is performed here.
+
+### Next Expected Work
+- Implement YOLO, optical flow, MediaPipe, depth, particle, and event analyzers against the established `AnalysisResult` contract.
+- Wire OSC continuous values for ports `9000` and `57120`, plus `/trigger/*` event output for SuperCollider.
+- Verify with `python3 -c 'import ...'` before the builder emits `python.built`.
