@@ -18,3 +18,4 @@
 [2026-03-19T08:26:54Z] cmd=printf ... >> .agent/scratchpad.md, exit=1, error=zsh unmatched quote while appending scratchpad, next=use a safely quoted append command for multiline scratchpad updates
 [2026-03-19T08:28:56Z] Shader Builder | xcrun metal -c swift/Sources/VirtualRealBody/Shaders/VirtualBody.metal -I external/lygia -o /dev/null | xcrun: error: unable to find utility "metal", not a developer tool or in PATH
 [2026-03-19T08:32:20Z] iteration #16 | SC Builder | shader.built | error | python gate probe used stale analyzer export DenseOpticalFlowAnalyzer
+[2026-03-19T08:37:54Z] cmd=cd python && python3 -c import config, main; from analyzers import ... SparseOpticalFlowAnalyzer ..., exit=1, error=ImportError cannot import name SparseOpticalFlowAnalyzer from analyzers, next=use the actual sparse optical-flow export name from python/analyzers/__init__.py for import-gate verification

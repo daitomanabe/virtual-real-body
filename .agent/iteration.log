@@ -39,3 +39,5 @@
 [2026-03-19T08:36:00Z] iteration #17 | Integrator | sc.built | issues | 検証=python import gate成功, swift build成功, Lygia include存在確認; 問題=python/analyzers/event_analyzer.py の /trigger/* OSC が positional list のままで SC named-pair 契約と不一致
 [2026-03-19T08:33:14Z] iteration start | Integrator | sc.built
 [2026-03-19T08:35:53Z] iteration #18 | Python Builder | review.python | done | 実装ファイル=python/analyzers/event_analyzer.py; 検証=python3 import gate成功, trigger OSC が amp/freq/pan named-pair で出力
+[2026-03-19T08:37:01Z] event=python.built | hat=swift_builder | status=start
+[2026-03-19T08:38:31Z] iteration #19 | Swift Builder | python.built | done | 検証=swift build成功, python3 import gate成功; 変更=.agent/scratchpad.md, .agent/iteration.log; ソース修正なしでPhase 2現状を再確認

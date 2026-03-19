@@ -218,6 +218,19 @@
 ## Iteration #10 — SC Builder
 
 ### Phase 3 Completion
+- `supercollider/vrb_receiver.scd` now accepts the current named-pair payload shape for continuous controls and trigger synths.
+- SuperCollider runtime verification is still blocked by missing `sclang` in this environment, but the file is aligned with the Python OSC contract.
+
+## Iteration #19 — Swift Builder
+
+### Validation Pass
+- Re-read the existing Swift app shell after the latest `python.built` recovery event and confirmed the current package, app delegate, camera capture, pose receiver, Lygia resolver, and renderer files still match the Phase 2 contract.
+- `cd swift && swift build` succeeds without further source changes.
+- Re-ran the required Python import gate using the actual public analyzer exports (`MediaPipeAnalyzer`, `SparseFlowAnalyzer`) plus `transport.deserialise`; it passes.
+
+### Current State
+- No additional Swift source edits were required in this iteration.
+- The correct next handoff from this hat remains `swift.built` so downstream shader/integration flow can continue from a verified Swift baseline.
 - `supercollider/vrb_receiver.scd` was added with `SynthDef`, `OSCdef`, FX buses, cleanup hooks, and the SC-side named-pair parser for OSC control.
 - Runtime verification remained partial because `sclang` is not installed in this environment; only the required Python import gate could be re-run at handoff time.
 
