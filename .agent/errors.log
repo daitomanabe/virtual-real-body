@@ -9,3 +9,7 @@
 [2026-03-19T08:07:41Z] shader_builder | python import gate probe failed: cannot import name SparseOpticalFlowAnalyzer from analyzers
 [2026-03-19T08:11:21Z] SC Builder | which sclang failed: sclang not found
 [2026-03-19T08:14:40Z] Integrator error | cmd=cd python && python3 -c ... from transport.zmq_publisher import ZMQPublisher, deserialise ... | exit=1 | ImportError: cannot import name deserialise from transport.zmq_publisher
+[2026-03-19T08:16:41Z] Swift Builder | cmd=pkg-config --libs libzmq | exit=127 | error=pkg-config not installed; fallback=use brew --prefix zeromq and explicit include/lib paths
+[2026-03-19T08:16:50Z] Swift Builder | cmd=ls /opt/homebrew/opt/zeromq/include/zmq.h /opt/homebrew/opt/zeromq/lib/libzmq.* | exit=1 | error=zsh glob unmatched; fallback=list zeromq lib directory directly
+[2026-03-19T08:17:00Z] Swift Builder | cmd=ls -la /opt/homebrew/opt/zeromq/include /opt/homebrew/opt/zeromq/lib | exit=1 | error=zeromq prefix path missing, next=inspect brew symlink target with ls -l and brew info --json if needed
+[2026-03-19T08:17:09Z] Swift Builder | cmd=ls -l /opt/homebrew/opt/zeromq && brew info zeromq --json=v2 | exit=1 | error=left side failed before brew info due to && short-circuit, next=run brew info zeromq separately

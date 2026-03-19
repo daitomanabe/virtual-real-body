@@ -27,3 +27,6 @@
 [2026-03-19T08:15:35Z] iteration #11 | Integrator | sc.built | issues | Python import gate failed on missing deserialise export; also noted Swift TCP-vs-ZMQ framing mismatch and SC symbol-vs-string OSC named-pair mismatch for follow-up
 [2026-03-19T08:13:58Z] event=review.python
 [2026-03-19T08:14:52Z] iteration #12 | Python Builder | review.python | done | 実装ファイル=python/transport/zmq_publisher.py, python/transport/__init__.py; 検証=deserialise import OK, python3 import gate成功
+[2026-03-19T08:15:46Z] iteration event | Swift App Builder | python.built | started
+[2026-03-19T08:20:30Z] iteration #13 | Ralph | task.resume | start | reviewed scratchpad/iteration log, confirmed review.python recovery, and inspected the remaining dirty worktree for the next valid handoff
+[2026-03-19T08:20:30Z] iteration #13 | Ralph | task.resume | done | selected review.swift as the single recovery event because PoseReceiver now contains the pending ZMQ transport-alignment work noted by Integrator

@@ -1,34 +1,41 @@
+import Darwin
 import Foundation
-import Network
 import simd
 
 final class PoseReceiver {
-    private let queue = DispatchQueue(label: "vrb.pose.receiver")
-    private var connection: NWConnection?
-    private let host: NWEndpoint.Host
-    private let port: NWEndpoint.Port
+    private let queue = DispatchQueue(label: "vrb.pose.receiver", qos: .userInitiated)
+    private let endpoint: String
     private let decoder = MessagePackDecoder()
-    private var buffer = Data()
     private let lock = NSLock()
     private var latest = PoseFrame.empty
+    private var subscriber: ZeroMQSubscriber?
+    private var running = false
 
     init(host: String = ZMQ_HOST, port: UInt16 = ZMQ_PORT) {
-        self.host = NWEndpoint.Host(host)
-        self.port = NWEndpoint.Port(rawValue: port) ?? 5555
+        endpoint = "tcp://\(host):\(port)"
     }
 
     func start() {
-        guard connection == nil else { return }
-        let connection = NWConnection(host: host, port: port, using: .tcp)
-        self.connection = connection
-        connection.stateUpdateHandler = { _ in }
-        connection.start(queue: queue)
-        receiveNextChunk()
+        guard !running else { return }
+        do {
+            let subscriber = try ZeroMQSubscriber(
+                endpoint: endpoint,
+                subscriptions: ["mp.pose", "yolo.pose"]
+            )
+            self.subscriber = subscriber
+            running = true
+            queue.async { [weak self] in
+                self?.receiveLoop()
+            }
+        } catch {
+            fputs("PoseReceiver failed to start ZMQ subscriber: \(error)\n", stderr)
+        }
     }
 
     func stop() {
-        connection?.cancel()
-        connection = nil
+        running = false
+        subscriber?.close()
+        subscriber = nil
     }
 
     func latestFrame() -> PoseFrame {
@@ -45,26 +52,11 @@ final class PoseReceiver {
         lock.unlock()
     }
 
-    private func receiveNextChunk() {
-        connection?.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] data, _, complete, _ in
-            guard let self else { return }
-            if let data, !data.isEmpty {
-                self.buffer.append(data)
-                self.processBufferedMessages()
-            }
-            if !complete {
-                self.receiveNextChunk()
-            }
-        }
-    }
-
-    private func processBufferedMessages() {
-        while let separator = buffer.firstIndex(of: 0x0A) {
-            let line = buffer.prefix(upTo: separator)
-            buffer.removeSubrange(...separator)
-            guard let space = line.firstIndex(of: 0x20) else { continue }
-            let topicData = line.prefix(upTo: space)
-            let payload = line.suffix(from: line.index(after: space))
+    private func receiveLoop() {
+        while running, let packet = subscriber?.recv() {
+            guard let separator = packet.firstIndex(of: 0x20) else { continue }
+            let topicData = packet.prefix(upTo: separator)
+            let payload = packet.suffix(from: packet.index(after: separator))
             guard let topic = String(data: topicData, encoding: .utf8) else { continue }
             ingestMessage(topic: topic, payload: Data(payload))
         }
@@ -186,6 +178,173 @@ private extension Array {
     }
 }
 
+private final class ZeroMQSubscriber {
+    private let api: ZeroMQAPI
+    private let context: OpaquePointer
+    private let socket: OpaquePointer
+    private var isClosed = false
+
+    init(endpoint: String, subscriptions: [String]) throws {
+        api = try ZeroMQAPI.load()
+        guard let context = api.ctxNew() else {
+            throw ZeroMQRuntimeError.contextCreationFailed
+        }
+        self.context = context
+
+        guard let socket = api.socket(context, ZeroMQConstants.subscriber) else {
+            _ = api.ctxTerm(context)
+            throw ZeroMQRuntimeError.socketCreationFailed
+        }
+        self.socket = socket
+
+        do {
+            try setInt32Option(ZeroMQConstants.linger, value: 0)
+            for subscription in subscriptions {
+                try setStringOption(ZeroMQConstants.subscribe, value: subscription)
+            }
+            try call(api.connect(socket, endpoint))
+        } catch {
+            close()
+            throw error
+        }
+    }
+
+    func recv() -> Data? {
+        guard !isClosed else { return nil }
+
+        var storage = Data(count: 64 * 1024)
+        let received = storage.withUnsafeMutableBytes { rawBuffer -> Int32 in
+            guard let baseAddress = rawBuffer.baseAddress else { return -1 }
+            return api.recv(socket, baseAddress, Int32(rawBuffer.count), 0)
+        }
+
+        if received > 0 {
+            storage.count = Int(received)
+            return storage
+        }
+
+        return nil
+    }
+
+    func close() {
+        guard !isClosed else { return }
+        isClosed = true
+        _ = api.close(socket)
+        _ = api.ctxTerm(context)
+    }
+
+    deinit {
+        close()
+    }
+
+    private func setStringOption(_ option: Int32, value: String) throws {
+        try value.withCString { cString in
+            let length = strlen(cString)
+            try call(api.setsockopt(socket, option, cString, length))
+        }
+    }
+
+    private func setInt32Option(_ option: Int32, value: Int32) throws {
+        var mutableValue = value
+        try withUnsafePointer(to: &mutableValue) { pointer in
+            try call(api.setsockopt(socket, option, pointer, MemoryLayout<Int32>.size))
+        }
+    }
+
+    private func call(_ result: Int32) throws {
+        if result == -1 {
+            throw ZeroMQRuntimeError.operationFailed
+        }
+    }
+}
+
+private struct ZeroMQAPI {
+    typealias CtxNew = @convention(c) () -> OpaquePointer?
+    typealias CtxTerm = @convention(c) (OpaquePointer?) -> Int32
+    typealias SocketFn = @convention(c) (OpaquePointer?, Int32) -> OpaquePointer?
+    typealias ConnectFn = @convention(c) (OpaquePointer?, UnsafePointer<CChar>?) -> Int32
+    typealias SetSockOptFn = @convention(c) (OpaquePointer?, Int32, UnsafeRawPointer?, Int) -> Int32
+    typealias RecvFn = @convention(c) (OpaquePointer?, UnsafeMutableRawPointer?, Int32, Int32) -> Int32
+    typealias CloseFn = @convention(c) (OpaquePointer?) -> Int32
+
+    let handle: UnsafeMutableRawPointer
+    let ctxNew: CtxNew
+    let ctxTerm: CtxTerm
+    let socket: SocketFn
+    let connect: ConnectFn
+    let setsockopt: SetSockOptFn
+    let recv: RecvFn
+    let close: CloseFn
+
+    static func load() throws -> ZeroMQAPI {
+        for candidate in ZeroMQConstants.libraryCandidates {
+            if let handle = dlopen(candidate, RTLD_NOW) {
+                do {
+                    return try ZeroMQAPI(handle: handle)
+                } catch {
+                    dlclose(handle)
+                    throw error
+                }
+            }
+        }
+        throw ZeroMQRuntimeError.libraryNotFound
+    }
+
+    private init(handle: UnsafeMutableRawPointer) throws {
+        self.handle = handle
+        ctxNew = try Self.resolve("zmq_ctx_new", in: handle)
+        ctxTerm = try Self.resolve("zmq_ctx_term", in: handle)
+        socket = try Self.resolve("zmq_socket", in: handle)
+        connect = try Self.resolve("zmq_connect", in: handle)
+        setsockopt = try Self.resolve("zmq_setsockopt", in: handle)
+        recv = try Self.resolve("zmq_recv", in: handle)
+        close = try Self.resolve("zmq_close", in: handle)
+    }
+
+    private static func resolve<T>(_ symbol: String, in handle: UnsafeMutableRawPointer) throws -> T {
+        guard let resolved = dlsym(handle, symbol) else {
+            throw ZeroMQRuntimeError.symbolMissing(symbol)
+        }
+        return unsafeBitCast(resolved, to: T.self)
+    }
+}
+
+private enum ZeroMQConstants {
+    static let subscriber: Int32 = 2
+    static let linger: Int32 = 17
+    static let subscribe: Int32 = 6
+    static let libraryCandidates = [
+        "libzmq.dylib",
+        "/opt/homebrew/lib/libzmq.dylib",
+        "/usr/local/lib/libzmq.dylib"
+    ]
+}
+
+private enum ZeroMQRuntimeError: Error {
+    case libraryNotFound
+    case symbolMissing(String)
+    case contextCreationFailed
+    case socketCreationFailed
+    case operationFailed
+}
+
+extension ZeroMQRuntimeError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .libraryNotFound:
+            return "libzmq.dylib was not found in the expected runtime locations."
+        case let .symbolMissing(symbol):
+            return "Missing libzmq symbol: \(symbol)"
+        case .contextCreationFailed:
+            return "Unable to create ZeroMQ context."
+        case .socketCreationFailed:
+            return "Unable to create ZeroMQ subscriber socket."
+        case .operationFailed:
+            return "A ZeroMQ socket operation failed."
+        }
+    }
+}
+
 enum MessagePackError: Error {
     case insufficientData
     case unsupported(UInt8)
@@ -266,19 +425,7 @@ private struct MessagePackReader {
         }
     }
 
-    mutating func readMap(count: Int) throws -> [String: Any] {
-        var result: [String: Any] = [:]
-        result.reserveCapacity(count)
-        for _ in 0..<count {
-            guard let key = try readValue() as? String else {
-                throw MessagePackError.invalidUTF8
-            }
-            result[key] = try readValue()
-        }
-        return result
-    }
-
-    mutating func readArray(count: Int) throws -> [Any] {
+    private mutating func readArray(count: Int) throws -> [Any] {
         var result: [Any] = []
         result.reserveCapacity(count)
         for _ in 0..<count {
@@ -287,65 +434,82 @@ private struct MessagePackReader {
         return result
     }
 
-    mutating func readString(length: Int) throws -> String {
-        let bytes = try readBytes(count: length)
-        guard let string = String(data: bytes, encoding: .utf8) else {
+    private mutating func readMap(count: Int) throws -> [String: Any] {
+        var result: [String: Any] = [:]
+        result.reserveCapacity(count)
+        for _ in 0..<count {
+            let keyValue = try readValue()
+            guard let key = keyValue as? String else {
+                throw MessagePackError.invalidUTF8
+            }
+            result[key] = try readValue()
+        }
+        return result
+    }
+
+    private mutating func readString(length: Int) throws -> String {
+        let subdata = try readData(length: length)
+        guard let string = String(data: subdata, encoding: .utf8) else {
             throw MessagePackError.invalidUTF8
         }
         return string
     }
 
-    mutating func readFloat32() throws -> Float {
+    private mutating func readFloat32() throws -> Float {
         Float(bitPattern: try readUInt32())
     }
 
-    mutating func readFloat64() throws -> Double {
+    private mutating func readFloat64() throws -> Double {
         Double(bitPattern: try readUInt64())
     }
 
-    mutating func readInt8() throws -> Int8 {
-        Int8(bitPattern: try readByte())
-    }
-
-    mutating func readInt16() throws -> Int16 {
-        Int16(bitPattern: try readUInt16())
-    }
-
-    mutating func readInt32() throws -> Int32 {
-        Int32(bitPattern: try readUInt32())
-    }
-
-    mutating func readInt64() throws -> Int64 {
-        Int64(bitPattern: try readUInt64())
-    }
-
-    mutating func readUInt16() throws -> UInt16 {
-        let data = try readBytes(count: 2)
+    private mutating func readUInt16() throws -> UInt16 {
+        let data = try readData(length: 2)
         return data.withUnsafeBytes { $0.load(as: UInt16.self).bigEndian }
     }
 
-    mutating func readUInt32() throws -> UInt32 {
-        let data = try readBytes(count: 4)
+    private mutating func readUInt32() throws -> UInt32 {
+        let data = try readData(length: 4)
         return data.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
     }
 
-    mutating func readUInt64() throws -> UInt64 {
-        let data = try readBytes(count: 8)
+    private mutating func readUInt64() throws -> UInt64 {
+        let data = try readData(length: 8)
         return data.withUnsafeBytes { $0.load(as: UInt64.self).bigEndian }
     }
 
-    mutating func readByte() throws -> UInt8 {
-        guard index < data.endIndex else { throw MessagePackError.insufficientData }
-        let value = data[index]
-        index = data.index(after: index)
-        return value
+    private mutating func readInt8() throws -> Int8 {
+        Int8(bitPattern: try readByte())
     }
 
-    mutating func readBytes(count: Int) throws -> Data {
-        let end = data.index(index, offsetBy: count, limitedBy: data.endIndex)
-        guard let end else { throw MessagePackError.insufficientData }
-        let slice = data[index..<end]
+    private mutating func readInt16() throws -> Int16 {
+        Int16(bitPattern: try readUInt16())
+    }
+
+    private mutating func readInt32() throws -> Int32 {
+        Int32(bitPattern: try readUInt32())
+    }
+
+    private mutating func readInt64() throws -> Int64 {
+        Int64(bitPattern: try readUInt64())
+    }
+
+    private mutating func readByte() throws -> UInt8 {
+        guard index < data.endIndex else {
+            throw MessagePackError.insufficientData
+        }
+        let byte = data[index]
+        index = data.index(after: index)
+        return byte
+    }
+
+    private mutating func readData(length: Int) throws -> Data {
+        guard data.distance(from: index, to: data.endIndex) >= length else {
+            throw MessagePackError.insufficientData
+        }
+        let end = data.index(index, offsetBy: length)
+        let subdata = data[index..<end]
         index = end
-        return Data(slice)
+        return Data(subdata)
     }
 }

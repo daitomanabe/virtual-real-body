@@ -280,3 +280,17 @@
 
 ## Next Hat Focus
 - Integrator can rerun the Python import gate without the previous `deserialise` ImportError and continue on the remaining Swift/SC integration mismatches separately.
+
+## Iteration #13 — Ralph Coordination
+
+### Recovery State
+- `review.python` has been fixed and the Python import gate now passes again.
+- The current worktree contains an uncommitted Swift-side change in `swift/Sources/VirtualRealBody/Input/PoseReceiver.swift` that replaces the prior raw TCP/newline receiver with a ZeroMQ subscriber implementation.
+- Runtime tasks still leave final review blocked behind integration, so the next valid single-hat recovery step is to resume Swift review rather than jump ahead to docs or completion.
+
+### Delegation Decision
+- Re-emit `review.swift` so Swift Builder can finish and validate the transport alignment work against the Python ZMQ PUB contract.
+- Keep this iteration coordination-only; do not inspect or alter implementation beyond recording state and routing the next handoff.
+
+### Next Expected Work
+- Swift Builder should complete verification of the ZeroMQ-backed `PoseReceiver`, confirm `swift build`, and then hand back `swift.built` for the remaining shader/SC/integration path.
