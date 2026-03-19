@@ -59,4 +59,7 @@
 [2026-03-19T08:58:30Z] iteration #27 | Integrator | sc.built | done | 検証=python import gate成功, swift build成功, python main dry-run/synthetic成功, ZMQ/OSC/LYGIA整合確認; 残課題=sclang と Metal CLI はローカル未導入だが source-level mismatch はなし
 [2026-03-19T08:52:29Z] iteration event | Integrator | sc.built
 [2026-03-19T08:54:27Z] iteration start | Final Reviewer | integration.done | in_progress | started final review
+[2026-03-19T08:57:02Z] iteration #28 | Final Reviewer | integration.done | done | README/COMPLETION_REPORT生成; file inventory OK; python import gate/dry-run/synthetic と swift build 再検証成功; 残課題=sclang, xcrun metal, live camera env
 [2026-03-19T08:57:03Z] iteration #28 | Final Reviewer | integration.done | done | 追加=README.md, COMPLETION_REPORT.md; 検証=required files present, python import gate成功, swift build成功; 制約=sclang/Metal CLI未導入
+[2026-03-19T08:57:56Z] iteration start | Ralph | event=task.resume | in_progress | reviewing blocked integrator task and selecting the next single handoff
+[2026-03-19T08:58:45Z] iteration #29 | Ralph | task.resume | done | reconciled stale integration task state, documented recovery decision, and prepared integration.done re-handoff

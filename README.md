@@ -1,119 +1,181 @@
 # virtual-real-body
 
-リアル身体とバーチャル身体を往復接続するリアルタイム・フィードバックシステムです。Python でダンサー映像を解析し、ZMQ で Swift/Satin レンダラへ、OSC で Swift と SuperCollider へ状態を配信します。Swift 側はカメラ映像と仮想身体を横並び 2 面で合成し、SuperCollider 側は連続制御とトリガーを音響へ変換します。
+`virtual-real-body` is a three-part realtime pipeline:
+
+1. Python captures camera frames, runs body and motion analyzers, then publishes MessagePack payloads over ZMQ and control messages over OSC.
+2. Swift builds a fullscreen Satin renderer that subscribes to pose data, expands LYGIA shader includes from the local submodule, and renders a two-panel Metal output.
+3. SuperCollider receives OSC control data and maps motion, flow, and detection state into a continuous body synth plus discrete trigger events.
+
+The repository is public at `https://github.com/daitomanabe/virtual-real-body` and keeps both renderer dependencies as git submodules:
+
+- `external/Satin`
+- `external/lygia`
 
 ## Architecture
 
-```text
-Camera
-  -> Python analysis engine
-      -> ZMQ PUB tcp://*:5555
-      -> OSC UDP 127.0.0.1:9000
-      -> OSC UDP 127.0.0.1:57120
-  -> Swift / Satin / Metal renderer
-  -> SuperCollider receiver
+### Python analysis engine
+
+- Entry point: `python/main.py`
+- Core runtime: `python/core/engine.py`
+- Transport:
+  - ZMQ PUB `tcp://*:5555`
+  - OSC `127.0.0.1:9000` and `127.0.0.1:57120`
+- Analyzer set:
+  - `yolo.detect`
+  - `yolo.pose`
+  - `yolo.seg`
+  - `flow.dense`
+  - `flow.sparse`
+  - `mp.pose`
+  - `depth.map`
+  - `event`
+  - `particle.state`
+
+`EventAnalyzer` converts pose, flow, and depth state into both continuous OSC controls such as `/synth/body` and `/fx/*`, plus trigger events such as `/trigger/motion_onset` and `/trigger/impact`.
+
+### Swift renderer
+
+- Package root: `swift/`
+- Dependency: local Satin package at `../external/Satin`
+- Receiver: `swift/Sources/VirtualRealBody/Input/PoseReceiver.swift`
+- Renderer: `swift/Sources/VirtualRealBody/Rendering/MainRenderer.swift`
+- Shader include resolver: `swift/Sources/VirtualRealBody/Rendering/LygiaResolver.swift`
+
+The renderer creates two offscreen passes:
+
+- `VirtualBody.metal` for the synthetic body pass
+- `PoseOverlay.metal` for camera and pose overlay
+
+Those passes are combined in `Compositor.metal` into the final side-by-side output.
+
+### SuperCollider receiver
+
+- Script: `supercollider/vrb_receiver.scd`
+- Boot config sets `numInputBusChannels = 0` and `sampleRate = 44100`
+- Registers persistent body, delay, and reverb synths plus trigger synths for motion onset, impact, enter, exit, and flow burst
+
+The OSC parser accepts named-pair payloads from Python, including both `String` and `Symbol` keys.
+
+## Setup
+
+### 1. Clone with submodules
+
+```bash
+git clone --recurse-submodules https://github.com/daitomanabe/virtual-real-body.git
+cd virtual-real-body
 ```
 
-- Python: `python/main.py` が `AnalysisEngine` を起動し、YOLO、optical flow、MediaPipe、depth、event、particle の各アナライザを実行します。
-- Swift: `swift/Sources/VirtualRealBody/Rendering/MainRenderer.swift` が `VirtualBody.metal`、`PoseOverlay.metal`、`Compositor.metal` の 3 パスを使って 2560x720 の 2 面出力を描画します。
-- SuperCollider: `supercollider/vrb_receiver.scd` が `/synth/body`、`/fx/*`、`/trigger/*` を受けて持続音とトリガー音を生成します。
+If the repo is already cloned:
 
-## Requirements
+```bash
+git submodule update --init --recursive
+```
+
+### 2. Install Python dependencies
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r python/requirements.txt
+```
+
+### 3. Prepare local tooling
 
 - macOS 14+
-- Python 3
 - Swift 5.9+
-- `external/Satin` と `external/lygia` の submodule
-- Python dependencies: `pip install -r python/requirements.txt`
-- SuperCollider は任意ですが、音響系を実行するには `sclang` が必要です
+- Xcode / Metal developer tools for full runtime shader validation
+- SuperCollider for `sclang`
 
-## How to Run
+## Run
 
-### 1. Python analysis engine
+### 1. Start the Python engine
+
+Smoke test without a camera:
 
 ```bash
 cd python
-python3 -m pip install -r requirements.txt
-python3 main.py --synthetic-input --frame-limit 120
+python3 main.py --dry-run
+python3 main.py --synthetic-input --frame-limit 2
 ```
 
-- カメラ実行時は `python3 main.py`
-- 接続確認のみなら `python3 main.py --dry-run`
+Run the live pipeline:
 
-### 2. Swift renderer
+```bash
+cd python
+python3 main.py
+```
+
+### 2. Start the Swift renderer
 
 ```bash
 cd swift
 swift build
-swift run VirtualRealBody
+swift run
 ```
 
-- `PoseReceiver` は `tcp://localhost:5555` を購読し、`mp.pose` と `yolo.pose` を受信します。
-- `external/lygia` のシェーダ include は `LygiaResolver.swift` が実行時に展開します。
-
-### 3. SuperCollider receiver
+### 3. Start the SuperCollider receiver
 
 ```bash
 sclang supercollider/vrb_receiver.scd
 ```
 
-- 受信ポートは `57120`
-- オーディオ設定は `numInputBusChannels = 0`、`sampleRate = 44100`
+## ZMQ topics
 
-## ZMQ Topics
-
-| Topic | Payload summary |
+| Topic | Purpose |
 | --- | --- |
-| `yolo.detect` | `detections[{id, cls, name, conf, bbox, cx, cy}]` |
-| `yolo.pose` | `persons[{id, keypoints, velocity, speed, com, bbox}]` |
-| `yolo.seg` | `segments[{id, cls, conf, polygon}]` |
-| `flow.dense` | `flow_f16`, `energy`, `direction`, `quadrants` |
-| `flow.sparse` | `vectors`, `trails`, `count` |
-| `mp.pose` | `landmarks_norm`, `landmarks_world`, `velocity`, `speed_norm`, `energy`, `com` |
-| `depth.map` | `depth_f16`, `mean`, `com_depth`, `range` |
-| `particle.state` | `spawn_points`, `attractors`, `emitters`, `field` |
-| `event` | `events`, `pose_speed`, `flow_energy`, `com` |
-| `meta.fps` | `fps{analyzer: hz}` |
+| `yolo.detect` | YOLO person detection payloads |
+| `yolo.pose` | YOLO keypoints, per-person CoM, velocity, speed |
+| `yolo.seg` | Segmentation output payloads |
+| `flow.dense` | Dense optical-flow energy and direction |
+| `flow.sparse` | Sparse flow tracks |
+| `mp.pose` | MediaPipe landmarks and motion data |
+| `depth.map` | Depth summary payloads |
+| `event` | Derived event state and current motion metrics |
+| `particle.state` | Particle spawn and flow-derived state |
+| `meta.fps` | Analyzer FPS snapshots |
 
-各 ZMQ パケットは `topic + b" " + msgpack_payload` の形式です。`msgpack` が無い環境では Python 側が `repr(...)` フォールバックを使い、Swift 側はそれも decode できるようにしています。
+## OSC addresses
 
-## OSC Addresses
+| Address | Target | Payload |
+| --- | --- | --- |
+| `/synth/body` | SuperCollider | named pairs `freq/amp/cutoff/pan` |
+| `/fx/reverb/mix` | SuperCollider | `[mix]` |
+| `/fx/reverb/room` | SuperCollider | `[room]` |
+| `/fx/delay/time` | SuperCollider | `[seconds]` |
+| `/fx/delay/feedback` | SuperCollider | `[feedback]` |
+| `/trigger/motion_onset` | SuperCollider | named pairs `amp/freq/pan` |
+| `/trigger/person_enter` | SuperCollider | named pairs `amp/freq/pan` |
+| `/trigger/person_exit` | SuperCollider | named pairs `amp/freq/pan` |
+| `/trigger/impact` | SuperCollider | named pairs `amp/freq/pan` |
+| `/trigger/flow_burst` | SuperCollider | named pairs `amp/freq/pan` |
+| `/vrb/person/{id}/pos` | Swift / tools | `[x, y]` |
+| `/vrb/person/{id}/speed` | Swift / tools | `[speed]` |
+| `/vrb/person/{id}/bbox` | Swift / tools | `[x1, y1, x2, y2, conf]` |
+| `/vrb/person/{id}/joint/{name}` | Swift / tools | `[x, y, conf]` |
+| `/vrb/person/mp/{name}` | Swift / tools | `[x, y, z, vis]` |
+| `/vrb/flow/energy` | Swift / tools | `[energy]` |
+| `/vrb/flow/direction` | Swift / tools | `[angle]` |
+| `/vrb/depth/com` | Swift / tools | `[depth]` |
+| `/vrb/meta/detected` | Swift / SuperCollider | `[0 or 1]` |
 
-### Swift / visual side (`127.0.0.1:9000`)
+## Verification status
 
-| Address | Values |
-| --- | --- |
-| `/vrb/person/{id}/pos` | `x y` |
-| `/vrb/person/{id}/speed` | `v` |
-| `/vrb/person/{id}/bbox` | `x1 y1 x2 y2 conf` |
-| `/vrb/person/{id}/joint/{name}` | `x y conf` |
-| `/vrb/person/mp/{name}` | `x y z vis` |
-| `/vrb/flow/energy` | `v` |
-| `/vrb/flow/direction` | `angle` |
-| `/vrb/depth/com` | `d` |
-| `/vrb/meta/detected` | `0 or 1` |
+Verified in the current environment:
 
-### SuperCollider (`127.0.0.1:57120`)
+- `git submodule status`
+- `cd python && python3 -c "...import gate..."`
+- `cd python && python3 main.py --dry-run`
+- `cd python && python3 main.py --synthetic-input --frame-limit 2`
+- `cd swift && swift build`
 
-| Address | Values |
-| --- | --- |
-| `/synth/body` | `["freq", v, "amp", v, "cutoff", v, "pan", v]` |
-| `/fx/reverb/mix` | `[v]` |
-| `/fx/reverb/room` | `[v]` |
-| `/fx/delay/time` | `[v]` |
-| `/fx/delay/feedback` | `[v]` |
-| `/trigger/motion_onset` | `["amp", v, "freq", v, "pan", v]` |
-| `/trigger/person_enter` | `["amp", v, "freq", v, "pan", v]` |
-| `/trigger/person_exit` | `["amp", v, "freq", v, "pan", v]` |
-| `/trigger/impact` | `["amp", v, "freq", v, "pan", v]` |
-| `/trigger/flow_burst` | `["amp", v, "freq", v, "pan", v]` |
-| `/vrb/meta/detected` | `[0 or 1]` |
+Not verified in the current environment:
 
-## Verification Status
+- Live camera capture path with a physical device
+- `sclang supercollider/vrb_receiver.scd`
+- Standalone `xcrun metal` compilation
 
-- Verified: `cd python && python3 -c 'import config, main; from analyzers import YOLODetectAnalyzer, YOLOPoseAnalyzer, YOLOSegAnalyzer, OpticalFlowAnalyzer, SparseFlowAnalyzer, MediaPipeAnalyzer, DepthAnalyzer, EventAnalyzer, ParticleAnalyzer; from transport.zmq_publisher import ZMQPublisher, deserialise; from transport.osc_broadcaster import OSCBroadcaster; print("python import gate OK")'`
-- Verified: `cd python && python3 main.py --dry-run`
-- Verified: `cd python && python3 main.py --synthetic-input --frame-limit 2`
-- Verified: `cd swift && swift build`
-- Not locally verified: `sclang supercollider/vrb_receiver.scd` because `sclang` is not installed in this environment
-- Not locally verified: `xcrun -sdk macosx metal ...` because the Metal CLI tool is not installed in this environment
+## Known limitations
+
+- The live Python camera path depends on `opencv-python` and a locally accessible camera device.
+- SuperCollider runtime validation is blocked until `sclang` is installed locally.
+- Metal CLI validation is blocked until Xcode command line Metal tools are available.

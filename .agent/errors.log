@@ -24,3 +24,4 @@
 [2026-03-19T08:42:13Z] cmd=python3 -c import config, main; from analyzers import YOLODetectAnalyzer, YOLOPoseAnalyzer, YOLOSegAnalyzer, OpticalFlowAnalyzer, SparseOpticalFlowAnalyzer, MediaPipeAnalyzer, DepthAnalyzer, EventAnalyzer, ParticleAnalyzer; from transport.zmq_publisher import ZMQPublisher, deserialise; from transport.osc_broadcaster import OSCBroadcaster; print("python import gate OK") | error=ImportError cannot import name SparseOpticalFlowAnalyzer from analyzers
 [2026-03-19T08:49:18Z] Shader Builder | cmd=xcrun -sdk macosx metal -c swift/Sources/VirtualRealBody/Shaders/VirtualBody.metal -I external/lygia -o /dev/null | exit=1 | error=unable to find utility metal, not a developer tool or in PATH
 [2026-03-19T08:51:03Z] SC Builder | cmd=which sclang | exit=1 | error=sclang not found
+[2026-03-19T08:58:30Z] missing file: .ralph/agent/decisions.md while documenting Ralph recovery decision
