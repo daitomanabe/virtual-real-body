@@ -294,3 +294,14 @@
 
 ### Next Expected Work
 - Swift Builder should complete verification of the ZeroMQ-backed `PoseReceiver`, confirm `swift build`, and then hand back `swift.built` for the remaining shader/SC/integration path.
+
+## Iteration #14 — Swift Builder (review.swift)
+
+### Transport Alignment Recovery
+- `PoseReceiver` now tries normal MessagePack first and falls back to parsing the Python transport layer repr payload when `msgpack` is unavailable in the current environment. This keeps the Swift side compatible with the intended `topic + space + msgpack` contract while still interoperating with the repo's dependency-light Python fallback.
+- Verified `swift build` still succeeds.
+- Verified fixture decode end-to-end against Python-generated `mp.pose` and `yolo.pose` payloads: `mp true 42 ...`, `yolo true 43 ...`.
+- Re-ran the required Python import gate with the actual exported analyzer symbols and confirmed it succeeds.
+
+### Next Hat Focus
+- Integrator can resume protocol verification; the Swift receiver now accepts the current Python publisher framing used in this repo.

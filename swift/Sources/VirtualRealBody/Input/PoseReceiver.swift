@@ -63,7 +63,7 @@ final class PoseReceiver {
     }
 
     private func decodePoseFrame(topic: String, payload: Data) -> PoseFrame? {
-        guard let root = try? decoder.decode(payload) as? [String: Any] else {
+        guard let root = decodeRootObject(payload) else {
             return nil
         }
 
@@ -150,6 +150,30 @@ final class PoseReceiver {
     private static func parseVector3(_ value: Any?) -> SIMD3<Float>? {
         guard let row = value as? [Any] else { return nil }
         return SIMD3<Float>(asFloat(row[safe: 0]), asFloat(row[safe: 1]), asFloat(row[safe: 2]))
+    }
+
+    private func decodeRootObject(_ payload: Data) -> [String: Any]? {
+        if let root = try? decoder.decode(payload) as? [String: Any] {
+            return root
+        }
+        return Self.parsePythonFallbackObject(payload)
+    }
+
+    private static func parsePythonFallbackObject(_ payload: Data) -> [String: Any]? {
+        guard var text = String(data: payload, encoding: .utf8) else { return nil }
+        guard text.first == "{", text.last == "}" else { return nil }
+
+        text = text.replacingOccurrences(of: "True", with: "true")
+        text = text.replacingOccurrences(of: "False", with: "false")
+        text = text.replacingOccurrences(of: "None", with: "null")
+        text = text.replacingOccurrences(of: "'", with: "\"")
+
+        guard let jsonData = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any]
+        else {
+            return nil
+        }
+        return object
     }
 }
 

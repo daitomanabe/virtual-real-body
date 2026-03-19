@@ -14,3 +14,5 @@
 [2026-03-19T08:17:00Z] Swift Builder | cmd=ls -la /opt/homebrew/opt/zeromq/include /opt/homebrew/opt/zeromq/lib | exit=1 | error=zeromq prefix path missing, next=inspect brew symlink target with ls -l and brew info --json if needed
 [2026-03-19T08:17:09Z] Swift Builder | cmd=ls -l /opt/homebrew/opt/zeromq && brew info zeromq --json=v2 | exit=1 | error=left side failed before brew info due to && short-circuit, next=run brew info zeromq separately
 [2026-03-19T08:21:20Z] Ralph | task.resume | python3 import gate failed: ImportError cannot import name DenseFlowAnalyzer from analyzers; retry with exported optical-flow class names
+[2026-03-19T08:24:47Z] cmd=cd python && python3 -c ... DenseFlowAnalyzer ..., exit=1, error=ImportError cannot import name DenseFlowAnalyzer from analyzers
+[2026-03-19T08:26:54Z] cmd=printf ... >> .agent/scratchpad.md, exit=1, error=zsh unmatched quote while appending scratchpad, next=use a safely quoted append command for multiline scratchpad updates

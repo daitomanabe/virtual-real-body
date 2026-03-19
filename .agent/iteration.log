@@ -30,3 +30,5 @@
 [2026-03-19T08:15:46Z] iteration event | Swift App Builder | python.built | started
 [2026-03-19T08:20:30Z] iteration #13 | Ralph | task.resume | start | reviewed scratchpad/iteration log, confirmed review.python recovery, and inspected the remaining dirty worktree for the next valid handoff
 [2026-03-19T08:20:30Z] iteration #13 | Ralph | task.resume | done | selected review.swift as the single recovery event because PoseReceiver now contains the pending ZMQ transport-alignment work noted by Integrator
+[2026-03-19T08:22:46Z] iteration start | Swift Builder | event=review.swift
+[2026-03-19T08:26:35Z] iteration #14 | Swift Builder | review.swift | done | 修正=swift/Sources/VirtualRealBody/Input/PoseReceiver.swift にPython repr fallback追加; 検証=swift build成功, PoseReceiver decode fixture成功, python3 import gate成功
