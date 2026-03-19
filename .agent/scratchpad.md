@@ -238,6 +238,20 @@
 - [x] `swift/Sources/VirtualRealBody/Input/CameraCapture.swift` — AVCapture → MTLTexture
 - [x] `swift/Sources/VirtualRealBody/Rendering/LygiaResolver.swift` — `#include "lygia/..."` inline expansion
 - [x] `swift/Sources/VirtualRealBody/Rendering/MainRenderer.swift` — MetalViewRenderer subclass with 3-pass pipeline shell
+
+## Iteration #17 — Integrator
+
+### Verification Summary
+- Re-ran the required Python import gate and it passes with `ZMQPublisher, deserialise`.
+- Re-ran `cd swift && swift build`; it now completes successfully with no reported warnings/errors in the filtered output.
+- Verified port alignment: Python binds `tcp://*:5555` and OSC targets `9000` / `57120`; Swift subscribes to `127.0.0.1:5555`.
+- Verified Lygia include availability for the current shader set: `sdf/circleSDF.msl`, `sdf/lineSDF.msl`, and `draw/stroke.msl` exist under `external/lygia`.
+- Verified the current transport path is topic-prefixed MessagePack/root-dictionary decode, so there is no active fixed `FRAME_BYTES` contract to reconcile in this worktree.
+
+### Remaining Integration Issue
+- `python/analyzers/event_analyzer.py` still emits `/trigger/person_enter`, `/trigger/person_exit`, `/trigger/motion_onset`, `/trigger/impact`, and `/trigger/flow_burst` as positional numeric lists.
+- `supercollider/vrb_receiver.scd` expects named pairs for trigger parsing (`amp`, `freq`, optional `pan`), so current trigger messages fall back to SC defaults instead of using Python-derived values.
+- Next handoff should be `review.python` to convert all `/trigger/*` payloads to named-pair OSC lists consistent with `/synth/body`.
 - [x] `swift/Sources/VirtualRealBody/Shaders/VirtualBody.metal` — virtual body SDF/data-viz pass
 - [x] `swift/Sources/VirtualRealBody/Shaders/PoseOverlay.metal` — camera overlay skeleton pass
 - [x] `swift/Sources/VirtualRealBody/Shaders/Compositor.metal` — final 2-panel composite pass
