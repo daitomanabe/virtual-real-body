@@ -219,6 +219,24 @@
 
 ### Phase 3 Completion
 
+## Iteration #25 — Shader Builder
+
+### Phase 2 Revalidation
+- Re-read `specs/swift_renderer.md`, `MainRenderer.swift`, `PoseData.swift`, and the three `.metal` files against the current Swift handoff.
+- Confirmed the checked-in shader set still matches the required three-pass layout:
+  `VirtualBody.metal` provides the fullscreen vertex, Lygia-backed body pass, and velocity overlay entry points;
+  `PoseOverlay.metal` composites the flipped camera feed with bone/joint overlays;
+  `Compositor.metal` remaps left/right panel UVs and draws the divider glow.
+- No shader source changes were required in this iteration; the current implementation already satisfies the Phase 2 contract after the Python runtime fix.
+
+### Verification
+- `cd swift && swift build` succeeded.
+- `cd python && python3 -c 'import config, main; from analyzers import YOLODetectAnalyzer, YOLOPoseAnalyzer, YOLOSegAnalyzer, OpticalFlowAnalyzer, SparseFlowAnalyzer, MediaPipeAnalyzer, DepthAnalyzer, EventAnalyzer, ParticleAnalyzer; from transport.zmq_publisher import ZMQPublisher, deserialise; from transport.osc_broadcaster import OSCBroadcaster; print("python import gate OK")'` succeeded.
+- `xcrun -sdk macosx metal ...` still cannot run in this environment because the Metal CLI tool is not installed; this was recorded in `.agent/errors.log` and a fix memory.
+
+### Next Hat Focus
+- `shader.built` can hand off directly to SC Builder for the next SuperCollider-side validation pass.
+
 ## Iteration #22 — Integrator
 
 ### Verification Summary

@@ -52,3 +52,5 @@
 [2026-03-19T08:46:20Z] iteration #23 | Python Builder | review.python | done | 実装ファイル=python/main.py, .agent/scratchpad.md, .agent/iteration.log; 検証=python3 import gate成功, python3 main.py --dry-run成功, python3 main.py --synthetic-input --frame-limit 2成功
 [2026-03-19T08:47:25Z] event=python.built hat=swift_builder
 [2026-03-19T08:48:05Z] iteration #24 | Swift Builder | python.built | done | 検証=swift build成功, python3 import gate成功; 変更=.agent/scratchpad.md, .agent/iteration.log; ソース修正なしでPhase 2 handoffを再確認
+[2026-03-19T08:49:18Z] iteration #25 | Shader Builder | swift.built | done | 検証=swift build成功, python3 import gate成功; 再確認=VirtualBody/PoseOverlay/Compositor は現行Phase 2契約と整合; xcrun metal はCLI未導入
+[2026-03-19T08:48:44Z] iteration start | Shader Builder | swift.built | in_progress | start shader phase 2 inspection
