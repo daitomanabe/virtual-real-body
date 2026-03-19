@@ -1,0 +1,584 @@
+cli:
+  backend: "codex"
+  prompt_mode: "arg"
+
+event_loop:
+  completion_promise: "LOOP_COMPLETE"
+  max_iterations: 120
+  max_runtime_seconds: 14400
+  idle_timeout_secs: 1800
+  starting_event: "work.start"
+  prompt_file: "PROMPT.md"
+  checkpoint_interval: 1
+
+core:
+  scratchpad: ".agent/scratchpad.md"
+  specs_dir: "./specs/"
+  guardrails:
+    - "Fresh context each iteration — .agent/scratchpad.md を必ず読んでから作業開始"
+    - "Satin path: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Satin"
+    - "Lygia path: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia"
+    - "ZMQ port 5555 (binary/MessagePack), OSC port 9000 (Swift/TD) + 57120 (SuperCollider)"
+    - "全iteration開始時に受け取ったイベント名を .agent/iteration.log に記録"
+    - "エラーが起きたら .agent/errors.log にエラー内容を記録"
+    - "backpressure: python -c 'import xxx' でimportが通ることを確認してからdone発行"
+
+memories:
+  enabled: true
+  inject: auto
+
+tasks:
+  enabled: true
+
+hats:
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 0. Git Setup
+  # ──────────────────────────────────────────────────────────────────────────
+  git_setup:
+    name: "Git Setup"
+    description: "Git と GitHub の初期セットアップを行う"
+    triggers:
+      - "work.start"
+    publishes:
+      - "git.ready"
+      - "LOOP_COMPLETE"
+    instructions: |
+      Git/GitHub初期化。失敗したら即LOOP_COMPLETE。
+
+      作業開始時:
+      1. .agent/scratchpad.md を読んで現在の状況を把握
+      2. .agent/iteration.log を読んで直近の進捗を確認
+
+      実行手順:
+      1. gh auth status を確認（失敗 → LOOP_COMPLETE）
+      2. git init（未初期化の場合）
+      3. .gitignore が存在しない場合は以下の内容で作成:
+         ```
+         .venv/
+         __pycache__/
+         *.pyc
+         .build/
+         *.xcodeproj/
+         .DS_Store
+         .agent/memories.md
+         ```
+      4. git add -A && git commit -m "[Ralph] Initial: virtual-real-body project"
+      5. gh repo create virtual-real-body --private --source=. --remote=origin --push
+         （既存なら: git remote get-url origin で確認後 git push -u origin main）
+
+      作業完了後:
+      1. .agent/iteration.log に記録
+         [{ISO8601}] iteration #1 | Git Setup | work.start | done | repo={URL}
+      2. .agent/scratchpad.md を更新（repo URL・初期状態を記録）
+      3. git add -A && git commit -m "[Ralph] Git Setup: 完了" && git push origin main
+
+      成功 → ralph emit git.ready
+      失敗 → ralph emit LOOP_COMPLETE
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 1. Planner
+  # ──────────────────────────────────────────────────────────────────────────
+  planner:
+    name: "Planner"
+    description: "仕様を読み取り実装タスクと優先順位を整理する"
+    triggers:
+      - "git.ready"
+    publishes:
+      - "plan.ready"
+    instructions: |
+      specs/ を読み込み、実装タスクを分解して .agent/scratchpad.md に記録。
+
+      作業開始時:
+      1. .agent/scratchpad.md を読む
+      2. .agent/iteration.log を読む
+      3. specs/ 配下の全ファイルを読む
+      4. PROMPT.md を再読して全体像を把握
+
+      実行:
+      1. specs/ の内容からタスクを分解し以下のフォーマットで .agent/scratchpad.md に記録:
+
+         ## Phase 1: Python Analysis Engine
+         - [ ] config.py — 全パラメータ（ZMQ/OSC ports, YOLO settings, SC mapping）
+         - [ ] core/analyzer_base.py — 抽象基底クラス
+         - [ ] core/engine.py — AnalysisEngine（スレッド管理、meta-analyzerフック）
+         - [ ] transport/zmq_publisher.py — ZMQ PUB + MessagePack
+         - [ ] transport/osc_broadcaster.py — OSC UDP → port 9000 + 57120
+         - [ ] analyzers/yolo_analyzer.py — YOLODetect/Pose/Seg（MPS backend）
+         - [ ] analyzers/optical_flow_analyzer.py — Farneback + Lucas-Kanade
+         - [ ] analyzers/mediapipe_analyzer.py — 33点骨格
+         - [ ] analyzers/depth_analyzer.py — Depth Anything v2（optional）
+         - [ ] analyzers/event_analyzer.py — 離散イベント検出 → SC /trigger/*
+         - [ ] analyzers/particle_analyzer.py — フロー → パーティクル spawn データ
+         - [ ] main.py — エントリポイント（CLI args）
+         - [ ] requirements.txt
+
+         ## Phase 2: Swift Renderer（Satin + LYGIA）
+         - [ ] Package.swift — Satin local path dependency
+         - [ ] App/main.swift + AppDelegate.swift — NSApp / fullscreen MTKView
+         - [ ] Data/PoseData.swift — バイナリプロトコル + GPU uniform structs
+         - [ ] Input/PoseReceiver.swift — ZMQ SUB（SwiftZMQ or Network.framework）
+         - [ ] Input/CameraCapture.swift — AVCapture → MTLTexture
+         - [ ] Rendering/LygiaResolver.swift — #include "lygia/..." → inline MSL
+         - [ ] Rendering/MainRenderer.swift — MetalViewRenderer subclass (3 passes)
+         - [ ] Shaders/VirtualBody.metal — SDF virtual body + LYGIA
+         - [ ] Shaders/PoseOverlay.metal — skeleton overlay + LYGIA
+         - [ ] Shaders/Compositor.metal — final 2-panel composite
+
+         ## Phase 3: SuperCollider
+         - [ ] supercollider/vrb_receiver.scd — SynthDef + OSCdef
+
+         ## Integration
+         - [ ] python → ZMQ → Swift (pose data flow)
+         - [ ] python → OSC → SuperCollider (events + continuous)
+         - [ ] camera → Python → ZMQ → Swift (camera texture)
+
+      2. 各ファイルが既存かどうか確認（python/ swift/ supercollider/ ディレクトリをチェック）
+      3. 未実装ファイルを特定して優先順位を設定
+
+      作業完了後:
+      1. .agent/iteration.log に記録
+         [{ISO8601}] iteration #{n} | Planner | git.ready | done | {タスク数}件のタスクを定義
+      2. .agent/scratchpad.md にタスクリスト書き込み済みであることを確認
+      3. git add -A && git commit -m "[Ralph] Planner: タスク分解完了" && git push origin main
+
+      → ralph emit plan.ready
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 2. Python Engine Builder
+  # ──────────────────────────────────────────────────────────────────────────
+  python_builder:
+    name: "Python Engine Builder"
+    description: "Python 解析エンジンを実装または修正する"
+    triggers:
+      - "plan.ready"
+      - "review.python"
+    publishes:
+      - "python.built"
+    instructions: |
+      Python解析エンジンを実装・修正する。
+
+      作業開始時:
+      1. .agent/scratchpad.md を読んで未完了タスクを確認
+      2. .agent/iteration.log を読む
+      3. python/ ディレクトリの現状を確認（ls -la python/ python/analyzers/ python/core/ python/transport/）
+
+      実装方針（specs/python_engine.md を参照）:
+      - YOLO_DEVICE="mps" — M5 MaxのMetal Performance Shaders使用
+      - ZMQ: tcp://*:5555 でPUB、MessagePack binary
+      - OSC: 127.0.0.1:9000（Swift/Satin）と127.0.0.1:57120（SC）に同時送信
+      - analyzer_base.py の Analyzer 抽象クラスを継承した構造
+      - EventAnalyzer/ParticleAnalyzer はmeta-analyzer（sibling resultを参照）
+
+      OSCアドレス体系（SCスキルの規約に従う）:
+        /synth/body     [freq, v, amp, v, cutoff, v, pan, v]  ← 継続制御
+        /fx/reverb/mix  [v]
+        /fx/reverb/room [v]
+        /fx/delay/time  [v]
+        /fx/delay/feedback [v]
+        /trigger/motion_onset  [amp, v, freq, v]  ← 離散イベント
+        /trigger/person_enter  [amp, v, freq, v]
+        /trigger/person_exit   [amp, v]
+        /trigger/impact        [amp, v, freq, v]
+        /trigger/flow_burst    [amp, v, freq, v]
+        /vrb/person/{id}/pos   x y
+        /vrb/person/{id}/speed v
+        /vrb/flow/energy       v
+        /vrb/flow/direction    angle
+        /vrb/depth/com         d
+        /vrb/meta/detected     0 or 1
+
+      ZMQトピック:
+        yolo.detect / yolo.pose / yolo.seg
+        flow.dense / flow.sparse
+        mp.pose
+        depth.map
+        particle.state
+        event
+        meta.fps
+
+      品質チェック（完了条件）:
+      1. cd python && python -c "
+           import config, core.analyzer_base, core.engine
+           import analyzers.yolo_analyzer
+           import analyzers.optical_flow_analyzer
+           import analyzers.mediapipe_analyzer
+           import analyzers.event_analyzer
+           import analyzers.particle_analyzer
+           import transport.zmq_publisher
+           import transport.osc_broadcaster
+           print('all imports OK')
+         "
+      2. エラーがあれば修正してから再実行
+      3. ImportError が解消されるまで繰り返す
+
+      作業完了後:
+      1. .agent/iteration.log に記録
+         [{ISO8601}] iteration #{n} | Python Builder | {event} | done | 実装ファイル={リスト}
+      2. .agent/scratchpad.md の Phase 1 タスクを更新（完了チェックマーク）
+      3. git add -A && git commit -m "[Ralph] Python Builder: {変更概要}" && git push origin main
+
+      → ralph emit python.built
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 3. Swift App Builder
+  # ──────────────────────────────────────────────────────────────────────────
+  swift_builder:
+    name: "Swift App Builder"
+    description: "Swift/Satin アプリ本体を実装または修正する"
+    triggers:
+      - "python.built"
+      - "review.swift"
+    publishes:
+      - "swift.built"
+    instructions: |
+      Swift/Satin アプリの構造ファイルを実装する（シェーダー以外）。
+
+      作業開始時:
+      1. .agent/scratchpad.md を読む
+      2. .agent/iteration.log を読む
+      3. swift/ ディレクトリの現状確認
+
+      CRITICAL — パス設定:
+        Satin local path: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Satin
+        Lygia local path: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia
+
+      Package.swift はローカルパス依存として記述:
+        ```swift
+        .package(path: "/Users/daitomacm5/development/lab/source/github-public-only/fabric/Satin")
+        ```
+
+      実装ファイル（specs/swift_renderer.md 参照）:
+      1. swift/Package.swift
+         - Satin をローカルパスで参照
+         - ターゲット: VirtualRealBody (macOS 14.0+)
+         - Shaders/ を .process("Shaders") でリソースバンドル
+
+      2. swift/Sources/VirtualRealBody/App/main.swift
+         - NSApplication エントリポイント
+
+      3. swift/Sources/VirtualRealBody/App/AppDelegate.swift
+         - NSWindow（borderless, fullscreen）
+         - MTKView セットアップ
+         - ESC キーで終了
+
+      4. swift/Sources/VirtualRealBody/Data/PoseData.swift
+         - JOINT_COUNT = 33
+         - ZMQ_HOST / ZMQ_PORT = 5555
+         - PoseFrame struct（detected, landmarks, velocities, speeds, com）
+         - GPU uniform structs: JointUniform, BoneUniform, VirtualBodyUniform, OverlayUniform
+         - BONES 定数（14ペア）
+
+      5. swift/Sources/VirtualRealBody/Input/PoseReceiver.swift
+         - ZMQ SUBソケットで "tcp://localhost:5555" に接続
+         - トピック購読: yolo.pose, mp.pose（どちらか来た方を使う）
+         - MessagePack → PoseFrame デコード
+         - SwiftZMQ が使えない場合は Network.framework の TCP で代替
+         ⚠️ ZMQ Swift binding: https://github.com/azawawi/SwiftZMQ を Package.swift に追加
+            または: ZMQ の代わりに Unix socket fallback を実装
+
+      6. swift/Sources/VirtualRealBody/Input/CameraCapture.swift
+         - AVCaptureSession → CVPixelBuffer → MTLTexture
+         - BGRAフォーマット
+         - Metal texture cache
+
+      7. swift/Sources/VirtualRealBody/Rendering/LygiaResolver.swift
+         - Lygia ディレクトリ: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia
+         - #include "lygia/..." を .msl ファイルから再帰的にインライン展開
+         - MTLDevice.makeLibrary(source:) に渡す前に呼ぶ
+
+      8. swift/Sources/VirtualRealBody/Rendering/MainRenderer.swift
+         - Satin の MetalViewRenderer を継承
+         - setup() / update() / draw() / resize() を実装
+         - 3パス: [VirtualBody → Tex] [Overlay → Tex] [Compositor → Screen]
+         - jointBuffer / boneBuffer / velocityBuffer を毎フレーム更新
+
+      品質チェック:
+        cd swift && swift build 2>&1 | tail -20
+        （コンパイルエラーがあれば修正してから再実行）
+        ⚠️ Shaders/ はビルド時にコンパイルされない（runtime compilation）のでbuild successで十分
+
+      作業完了後:
+      1. .agent/iteration.log に記録
+      2. .agent/scratchpad.md の Phase 2 を更新
+      3. git add -A && git commit -m "[Ralph] Swift Builder: {変更概要}" && git push origin main
+
+      → ralph emit swift.built
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 4. Shader Builder
+  # ──────────────────────────────────────────────────────────────────────────
+  shader_builder:
+    name: "Shader Builder"
+    description: "Metal と LYGIA を使った描画シェーダーを実装する"
+    triggers:
+      - "swift.built"
+      - "review.shader"
+    publishes:
+      - "shader.built"
+    instructions: |
+      Metal シェーダー3本を実装する。LYGIA .msl 関数を活用。
+
+      作業開始時:
+      1. .agent/scratchpad.md を読む
+      2. .agent/iteration.log を読む
+      3. Lygia の利用可能な .msl ファイルを確認:
+         ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/sdf/
+         ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/draw/
+         ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/generative/
+         ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/math/
+         ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/color/
+         ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/space/
+
+      実際に存在するファイル名を確認してから #include パスを書くこと。
+
+      実装する3ファイル（specs/swift_renderer.md 参照）:
+
+      1. swift/Sources/VirtualRealBody/Shaders/VirtualBody.metal
+         バーチャルボディのSDF描画。layers:
+         - background: 座標グリッド + fbm noise energy field
+         - bones: segmentSDF + stroke（speed → 色・太さ）
+         - joints: circleSDF（speed → 半径・色 blue→cyan）
+         - velocity vectors: instanced line pass（velocityVertex/velocityFragment）
+         使用LYGIA関数:
+           lygia/generative/fbm.msl  (エネルギーフィールドノイズ)
+           lygia/sdf/circleSDF.msl   (ジョイント円)
+           lygia/sdf/segmentSDF.msl  (ボーン線)
+           lygia/draw/stroke.msl     (縁取り)
+           lygia/color/palette.msl   (speed → color / Inigo Quilez palette)
+           lygia/math/map.msl        (speed → radius mapping)
+
+      2. swift/Sources/VirtualRealBody/Shaders/PoseOverlay.metal
+         カメラ映像にスケルトンを重畳。layers:
+         - camera base（texture2d, horizontal flip: uv.x = 1-uv.x）
+         - bone strokes（segmentSDF + stroke）
+         - joint rings + cores（circleSDF）
+         使用LYGIA: circleSDF, segmentSDF, stroke, map（上記と同じパスで）
+
+      3. swift/Sources/VirtualRealBody/Shaders/Compositor.metal
+         左右合成。
+         - left panel [0, dividerX]: virtualBodyTex をリマップ
+         - right panel [dividerX, 1]: overlayTex をリマップ
+         - divider: 1px グロー線（smoothstep）
+         - fullscreen triangle vertex shader（3頂点）
+         LYGIA不要。
+
+      シェーダー共通ルール:
+      - #include <metal_stdlib> の後に lygia #include
+      - LygiaResolver が実行時に展開するため、ファイル名は仮でOK
+      - uniform struct のパディングはMSL alignment に従う（4バイト/16バイト境界）
+      - fragment outputは float4 (color, 1.0)
+      - fullscreen triangle: 3頂点, no buffer（vid 0,1,2 でハードコード座標）
+
+      シェーダー構文チェック（xcrun metal でオフラインチェック）:
+        xcrun -sdk macosx metal -c swift/Sources/VirtualRealBody/Shaders/VirtualBody.metal \
+          -I /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia \
+          -o /dev/null 2>&1 | head -30
+        ⚠️ LygiaResolver は実行時展開なのでコンパイルエラーは無視してよい
+           ただし Metal 構文エラー（セミコロン抜け、型ミス等）は修正すること
+
+      作業完了後:
+      1. .agent/iteration.log に記録
+      2. .agent/scratchpad.md の Phase 2 シェーダー部分を更新
+      3. git add -A && git commit -m "[Ralph] Shader Builder: {変更概要}" && git push origin main
+
+      → ralph emit shader.built
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 5. SuperCollider Builder
+  # ──────────────────────────────────────────────────────────────────────────
+  sc_builder:
+    name: "SuperCollider Builder"
+    description: "SuperCollider の受信と音響エンジンを実装する"
+    triggers:
+      - "shader.built"
+      - "review.sc"
+    publishes:
+      - "sc.built"
+    instructions: |
+      SuperCollider 受信・合成エンジンを実装する。
+
+      作業開始時:
+      1. .agent/scratchpad.md を読む
+      2. .agent/iteration.log を読む
+      3. supercollider/ ディレクトリを確認
+
+      実装: supercollider/vrb_receiver.scd
+
+      SC OSC規約（/mnt/skills/user/supercollider-osc/SKILL.md 準拠）:
+        受信ポート: 57120 (NetAddr.langPort)
+        SC SynthDef規約:
+          - 全SynthDefに gate=1, out=0 arg
+          - EnvGen に doneAction: 2
+          - 出力は .tanh でソフトクリップ
+          - ステレオ: Pan2.ar または sig ! 2
+
+      受信するOSCメッセージ:
+        /synth/body      [freq, v, amp, v, cutoff, v, pan, v]  → ~body.set()
+        /fx/reverb/mix   [v] → ~reverb.set(\mix, v)
+        /fx/reverb/room  [v] → ~reverb.set(\room, v)
+        /fx/delay/time   [v] → ~delay.set(\delaytime, v)
+        /fx/delay/feedback [v] → ~delay.set(\feedback, v)
+        /trigger/motion_onset  [amp, v, freq, v] → Synth(\vrb_onset)
+        /trigger/person_enter  [amp, v, freq, v] → Synth(\vrb_enter) + ~body amp fade in
+        /trigger/person_exit   [amp, v]          → Synth(\vrb_exit) + ~body amp → 0
+        /trigger/impact        [amp, v, freq, v] → Synth(\vrb_impact)
+        /trigger/flow_burst    [amp, v, freq, v] → Synth(\vrb_flow_burst)
+        /vrb/meta/detected     [0or1]            → body amp管理
+
+      SynthDef 5本:
+        \vrb_body       — 持続音（SinOsc×3 + BrownNoise, RLPF, EnvAsr）
+        \vrb_onset      — モーション開始打撃音（SinOsc harmonic + WhiteNoise, EnvPerc）
+        \vrb_impact     — 衝撃音（SinOsc + XLine freq + WhiteNoise click）
+        \vrb_enter      — 人物検出上昇音（XLine freq, EnvNew）
+        \vrb_exit       — 人物消失下降音（XLine freq falling, EnvNew）
+        \vrb_flow_burst — フローバースト（BandPassNoise + LFNoise変調）
+        \vrb_reverb     — FXバス（FreeVerb2, ReplaceOut）
+        \vrb_delay      — ディレイFX（CombC, ReplaceOut）
+
+      FXバス設計:
+        ~fxBus = Bus.audio(s, 2)
+        全SynthはOut.ar(~fxBus.index, ...) で送出
+        ~reverb / ~delay は addToTail で後段処理
+
+      OSCdef 命名（.fix で保護）:
+        \body, \reverbMix, \reverbRoom, \delayTime, \delayFeedback
+        \motionOnset, \impact, \personEnter, \personExit, \flowBurst, \detected
+
+      ファイル構成（3セクション、( ) でブロック分割）:
+        Section 1: s.boot（単独実行）
+        Section 2: SynthDef定義 + Synth生成 + OSCdef登録（s.boot後に実行）
+        Section 3: クリーンアップ（停止時に実行）
+
+      OSCdef引数パース（named pair形式）:
+        var args = msg[1..].asArray;
+        var amp  = args[args.indexOf(\amp)  + 1] ? 0.5;
+        var freq = args[args.indexOf(\freq) + 1] ? 440;
+
+      作業完了後:
+      1. .agent/iteration.log に記録
+      2. .agent/scratchpad.md の Phase 3 を更新
+      3. git add -A && git commit -m "[Ralph] SC Builder: vrb_receiver.scd" && git push origin main
+
+      → ralph emit sc.built
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 6. Integrator
+  # ──────────────────────────────────────────────────────────────────────────
+  integrator:
+    name: "Integrator"
+    description: "各コンポーネントの統合不整合を検出してレビューを返す"
+    triggers:
+      - "sc.built"
+    publishes:
+      - "integration.done"
+      - "review.python"
+      - "review.swift"
+      - "review.shader"
+      - "review.sc"
+    instructions: |
+      全コンポーネントを横断的にレビューし、統合問題を検出・修正指示を出す。
+
+      作業開始時:
+      1. .agent/scratchpad.md を読む
+      2. .agent/iteration.log を読む
+
+      チェック項目:
+
+      A) プロトコル整合性チェック:
+         Python python/config.py のZMQ/OSCポートと
+         Swift Data/PoseData.swift の ZMQ_PORT / SOCKET_PATH が一致しているか
+         Python EventAnalyzer の OSCアドレスと SC vrb_receiver.scd の OSCdef アドレスが一致しているか
+
+      B) Python imports チェック:
+         cd python && python -c "
+           from config import *
+           from core.analyzer_base import Analyzer, AnalysisResult
+           from core.engine import AnalysisEngine
+           from analyzers.yolo_analyzer import YOLODetectAnalyzer, YOLOPoseAnalyzer
+           from analyzers.optical_flow_analyzer import OpticalFlowAnalyzer, SparseFlowAnalyzer
+           from analyzers.mediapipe_analyzer import MediaPipeAnalyzer
+           from analyzers.event_analyzer import EventAnalyzer
+           from analyzers.particle_analyzer import ParticleAnalyzer
+           from transport.zmq_publisher import ZMQPublisher, deserialise
+           from transport.osc_broadcaster import OSCBroadcaster
+           print('Python: all imports OK')
+         "
+
+      C) Swift build チェック:
+         cd swift && swift build 2>&1 | grep -E "error:|warning:|Build complete"
+
+      D) データフロー整合性:
+         - python/transport/zmq_publisher.py の _pack() でシリアライズした形式が
+           Swift PoseReceiver.swift で正しくデシリアライズできるか
+         - PoseFrame の byte layout（FRAME_BYTES）が Python/Swift で一致するか
+         - OSC named pair [amp, v, freq, v] 形式が SC side で正しくパースされているか
+
+      E) LYGIA #include パス:
+         各shaderの #include "lygia/XXX.msl" が
+         /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/XXX.msl
+         として実在するかチェック:
+           ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/sdf/circleSDF.msl
+           ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/sdf/segmentSDF.msl
+           ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/draw/stroke.msl
+         存在しない場合は実在するファイル名に修正指示を出す
+
+      問題があるコンポーネントに対して review.XXX イベントを発行。
+      全て問題なし → integration.done を発行。
+
+      作業完了後:
+      1. .agent/iteration.log に記録
+         [{ISO8601}] iteration #{n} | Integrator | sc.built | {done/issues} | {検出問題のサマリ}
+      2. .agent/scratchpad.md に統合状況を記録
+      3. git add -A && git commit -m "[Ralph] Integrator: {結果}" && git push origin main
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 7. Final Reviewer
+  # ──────────────────────────────────────────────────────────────────────────
+  final_reviewer:
+    name: "Final Reviewer"
+    description: "最終成果物を確認し完了レポートを生成する"
+    triggers:
+      - "integration.done"
+    publishes:
+      - "LOOP_COMPLETE"
+    instructions: |
+      最終レビュー。COMPLETION_REPORT.md を生成して LOOP_COMPLETE。
+
+      作業開始時:
+      1. .agent/scratchpad.md を読む
+      2. .agent/iteration.log を全て読む
+
+      最終チェック:
+      1. 全ファイルが存在することを確認:
+         python/ — config.py, main.py, requirements.txt
+                   core/{analyzer_base,engine}.py
+                   analyzers/{yolo,optical_flow,mediapipe,event,particle}_analyzer.py
+                   analyzers/depth_analyzer.py
+                   transport/{zmq_publisher,osc_broadcaster}.py
+         swift/ — Package.swift
+                  Sources/VirtualRealBody/App/{main,AppDelegate}.swift
+                  Sources/VirtualRealBody/Data/PoseData.swift
+                  Sources/VirtualRealBody/Input/{PoseReceiver,CameraCapture}.swift
+                  Sources/VirtualRealBody/Rendering/{LygiaResolver,MainRenderer}.swift
+                  Sources/VirtualRealBody/Shaders/{VirtualBody,PoseOverlay,Compositor}.metal
+         supercollider/vrb_receiver.scd
+
+      2. README.md を生成（起動手順・アーキテクチャ・OSCアドレス表・ZMQトピック表）
+
+      3. COMPLETION_REPORT.md を生成:
+         # Completion Report — virtual-real-body
+         ## Project Summary
+         ## Architecture Overview
+         ## Files Delivered
+         ## How to Run (3ステップ: python → swift → sc)
+         ## ZMQ Topics
+         ## OSC Addresses
+         ## Known Limitations / Future Work
+         ## Iteration Summary (iteration.log から)
+
+      作業完了後:
+      1. .agent/iteration.log に最終記録
+      2. git add -A && git commit -m "[Ralph] COMPLETE: virtual-real-body" && git push origin main
+
+      → ralph emit LOOP_COMPLETE

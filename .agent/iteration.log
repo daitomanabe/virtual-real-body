@@ -1,0 +1,4 @@
+# iteration log
+# format:
+# [ISO8601] iteration #{n} | {Hat名} | {受け取ったイベント} | {状態} | {具体的な変更内容}
+[2026-03-19T07:30:04Z] iteration #1 | Git Setup | work.start | start | verified Ralph state files, found no git repo, proceeding with bootstrap

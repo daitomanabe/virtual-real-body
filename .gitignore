@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.build/
+*.xcodeproj/
+.swiftpm/
+.DS_Store
+.ralph/
+.agent/memories.md
+*.o
+*.air
+*.metallib
