@@ -49,9 +49,12 @@ float2 vrbOverlayAspect(float2 uv, float2 resolution) {
     return centered;
 }
 
-float vrbOverlayJointDistance(float2 uv, float2 joint, float2 resolution) {
+float vrbOverlayJointMetric(float2 uv, float2 joint, float radius, float2 resolution) {
     float2 point = vrbOverlayAspect(joint, resolution);
-    return lineSDF(vrbOverlayAspect(uv, resolution), point, point + float2(0.0001, 0.0));
+    float2 centered = vrbOverlayAspect(uv, resolution);
+    float safeRadius = max(radius, 0.0001);
+    float2 local = (centered - point) / (safeRadius * 2.0) + 0.5;
+    return circleSDF(local) * safeRadius;
 }
 
 fragment float4 poseOverlayFragment(
@@ -103,9 +106,9 @@ fragment float4 poseOverlayFragment(
         }
 
         float radius = map(clamp(joints[i].speed, 0.0, 1.0), 0.0, 1.0, 0.012, 0.03);
-        float distanceToJoint = vrbOverlayJointDistance(in.uv, joints[i].positionXY, uniforms.resolution);
-        float ring = stroke(distanceToJoint, 0.0, radius);
-        float core = 1.0 - smoothstep(radius * 0.28, radius * 0.72, distanceToJoint);
+        float jointMetric = vrbOverlayJointMetric(in.uv, joints[i].positionXY, radius, uniforms.resolution);
+        float ring = stroke(jointMetric, radius, radius * 0.24);
+        float core = 1.0 - smoothstep(radius * 0.28, radius * 0.72, jointMetric);
         float3 tint = mix(float3(0.2, 0.85, 1.0), float3(1.0, 0.9, 0.45), joints[i].speed);
         overlayColor = mix(overlayColor, tint, saturate((ring * 0.95 + core * 0.5) * visibility));
     }

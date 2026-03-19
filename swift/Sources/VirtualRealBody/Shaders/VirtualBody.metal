@@ -78,10 +78,12 @@ float vrbGrid(float2 uv, float2 resolution) {
     return max(major * 0.55, minor * 0.25);
 }
 
-float vrbJointDistance(float2 uv, float2 joint, float radius, float2 resolution) {
+float vrbJointMetric(float2 uv, float2 joint, float radius, float2 resolution) {
     float2 centered = vrbAspectUV(uv, resolution);
     float2 point = vrbAspectUV(joint, resolution);
-    return lineSDF(centered, point, point + float2(0.0001, 0.0));
+    float safeRadius = max(radius, 0.0001);
+    float2 local = (centered - point) / (safeRadius * 2.0) + 0.5;
+    return circleSDF(local) * safeRadius;
 }
 
 float4 vrbVelocityOverlay(float2 uv, constant JointUniform *joints, constant VirtualBodyUniform& uniforms) {
@@ -177,9 +179,9 @@ fragment float4 virtualBodyFragment(
         }
 
         float radius = map(clamp(joints[i].speed, 0.0, 1.0), 0.0, 1.0, 0.014, 0.042);
-        float distanceToJoint = vrbJointDistance(uv, joints[i].positionXY, radius, uniforms.resolution);
-        float ring = stroke(distanceToJoint, 0.0, radius);
-        float core = 1.0 - smoothstep(radius * 0.35, radius, distanceToJoint);
+        float jointMetric = vrbJointMetric(uv, joints[i].positionXY, radius, uniforms.resolution);
+        float ring = stroke(jointMetric, radius, radius * 0.3);
+        float core = 1.0 - smoothstep(radius * 0.35, radius, jointMetric);
         float3 tint = mix(
             float3(0.08, 0.38, 0.92),
             float3(0.35, 0.98, 1.0),

@@ -305,3 +305,14 @@
 
 ### Next Hat Focus
 - Integrator can resume protocol verification; the Swift receiver now accepts the current Python publisher framing used in this repo.
+
+## Iteration #15 — Shader Builder
+
+### Phase 2 Shader Refresh
+- `VirtualBody.metal` と `PoseOverlay.metal` の joint 描画を `circleSDF` ベースへ修正し、spec の ring/core 表現に合わせた。
+- bone は `segmentSDF` が Lygia tree に存在しないため、実在する `lineSDF.msl` を代替の segment-distance 実装として維持。
+- 検証は `cd swift && swift build` と `cd python && python3 -c ...` の import gate を再実行して通過。
+
+### Next Hat Focus
+- SC Builder は既に完了済みなので、この handoff は Integrator が Python/Swift/SC の最新状態で再度統合確認する前提。
+- Metal CLI (`xcrun metal`) は未導入のため、オフライン shader compile は引き続き未検証。

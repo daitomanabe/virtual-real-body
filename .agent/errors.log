@@ -16,3 +16,4 @@
 [2026-03-19T08:21:20Z] Ralph | task.resume | python3 import gate failed: ImportError cannot import name DenseFlowAnalyzer from analyzers; retry with exported optical-flow class names
 [2026-03-19T08:24:47Z] cmd=cd python && python3 -c ... DenseFlowAnalyzer ..., exit=1, error=ImportError cannot import name DenseFlowAnalyzer from analyzers
 [2026-03-19T08:26:54Z] cmd=printf ... >> .agent/scratchpad.md, exit=1, error=zsh unmatched quote while appending scratchpad, next=use a safely quoted append command for multiline scratchpad updates
+[2026-03-19T08:28:56Z] Shader Builder | xcrun metal -c swift/Sources/VirtualRealBody/Shaders/VirtualBody.metal -I external/lygia -o /dev/null | xcrun: error: unable to find utility "metal", not a developer tool or in PATH
