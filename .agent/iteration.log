@@ -19,3 +19,5 @@
 [2026-03-19T08:02:10Z] iteration #7 | Ralph | task.resume | done | revalidated Python imports, recorded a failed import probe fix, and prepared to re-emit python.built to resume Swift Builder
 [2026-03-19T08:03:03Z] iteration start | Swift Builder | event=python.built
 [2026-03-19T08:04:42Z] iteration #8 | Swift Builder | python.built | done | 検証=swift build成功, python3 import gate成功; 修正=swift/Sources/VirtualRealBody/Rendering/LygiaResolver.swift, swift/Sources/VirtualRealBody/Rendering/MainRenderer.swift; task=swift:app-shell close
+[2026-03-19T08:05:28Z] event=swift.built
+[2026-03-19T08:08:16Z] iteration #9 | Shader Builder | swift.built | done | 実装=VirtualBody/PoseOverlay/Compositor の3 shader pass更新; 検証=swift build成功, python3 import gate成功, xcrun metal未導入をerrors/memoryへ記録

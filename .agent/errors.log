@@ -5,3 +5,5 @@
 [2026-03-19T07:43:19Z] scratchpad update failure | unquoted heredoc expanded while appending notes
 [2026-03-19T08:00:00Z] Ralph | task.resume | python3 import verification failed: ImportError cannot import name DenseOpticalFlowAnalyzer from analyzers
 [2026-03-19T08:04:19Z] Python import gate failed in Swift Builder | cmd=cd python && python3 -c ... DenseFlowAnalyzer ... | error=ImportError cannot import name DenseFlowAnalyzer from analyzers
+[2026-03-19T08:07:41Z] shader_builder | xcrun metal unavailable: unable to find utility metal
+[2026-03-19T08:07:41Z] shader_builder | python import gate probe failed: cannot import name SparseOpticalFlowAnalyzer from analyzers

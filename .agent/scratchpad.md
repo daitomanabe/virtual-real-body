@@ -202,3 +202,30 @@
 
 ### Next Hat Focus
 - Shader Builder can now focus on the three `.metal` passes and the runtime library entry points on top of a buildable Swift host.
+
+## Iteration #9 — Shader Builder
+
+### Phase 2 Shader Passes
+- Replaced the stub Metal shaders with a Lygia-backed three-pass setup for virtual body, camera overlay, and final composition.
+- `VirtualBody.metal` now renders grid/noise background, bone strokes, joint halos, and animated velocity traces using `fbm`, `lineSDF`, `stroke`, `palette`, and `map`.
+- `PoseOverlay.metal` now flips the camera feed horizontally and composites bone/joint overlays with the shared joint/bone buffers.
+- `Compositor.metal` now remaps left/right panels explicitly and adds a divider glow for the 2-panel output.
+
+### Notes
+- The checked-out Lygia tree does not contain `sdf/segmentSDF.msl`; used `sdf/lineSDF.msl` as the available segment-distance equivalent.
+- `xcrun metal` could not run in this environment because the Metal CLI utility is unavailable, so verification used `swift build` plus the required Python import gate instead.
+
+## Phase 2: Swift Renderer（Satin + LYGIA）
+- [x] `swift/Package.swift` — Satin submodule dependency
+- [x] `swift/Sources/VirtualRealBody/App/main.swift` + `AppDelegate.swift` — NSApp / fullscreen MTKView
+- [x] `swift/Sources/VirtualRealBody/Data/PoseData.swift` — バイナリプロトコル + GPU uniform structs
+- [x] `swift/Sources/VirtualRealBody/Input/PoseReceiver.swift` — TCP/MessagePack fallback receiver for `yolo.pose` / `mp.pose`
+- [x] `swift/Sources/VirtualRealBody/Input/CameraCapture.swift` — AVCapture → MTLTexture
+- [x] `swift/Sources/VirtualRealBody/Rendering/LygiaResolver.swift` — `#include "lygia/..."` inline expansion
+- [x] `swift/Sources/VirtualRealBody/Rendering/MainRenderer.swift` — MetalViewRenderer subclass with 3-pass pipeline shell
+- [x] `swift/Sources/VirtualRealBody/Shaders/VirtualBody.metal` — virtual body SDF/data-viz pass
+- [x] `swift/Sources/VirtualRealBody/Shaders/PoseOverlay.metal` — camera overlay skeleton pass
+- [x] `swift/Sources/VirtualRealBody/Shaders/Compositor.metal` — final 2-panel composite pass
+
+## Next Hat Focus
+- SuperCollider Builder can now implement `supercollider/vrb_receiver.scd` against the completed shader handoff.
