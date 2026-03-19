@@ -1,0 +1,7 @@
+msgpack>=1.0
+numpy>=1.26
+opencv-python>=4.10
+pyzmq>=26.0
+python-osc>=1.8
+ultralytics>=8.3
+mediapipe>=0.10

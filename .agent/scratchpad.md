@@ -92,3 +92,29 @@
 ### Next Expected Work
 - Python Builder should scaffold `python/config.py`, `python/main.py`, `python/core/`, and `python/transport/` first.
 - Once core transport is built and importable, the builder can emit `python.built` to unblock Swift work and the analyzer task chain.
+
+## Iteration #4 — Python Builder
+
+### Core/Transport Scaffold
+- Created the `python/` package tree with `config.py`, `main.py`, `core/`, `transport/`, and analyzer stub modules so the Python engine contract now exists on disk.
+- Implemented `AnalysisResult`, `Analyzer`, `AnalysisEngine`, `ZMQPublisher`, and `OSCBroadcaster` with optional dependency guards so module imports succeed before runtime packages are installed.
+- Added `requirements.txt` for the intended runtime stack and validated the current scaffold with `python3 -c` import checks.
+
+### Notes
+- `python` is not available as a shell command in this environment; `python3` was required for verification.
+- Analyzer implementations are still placeholders and remain the next Python task.
+
+## Phase 1: Python Analysis Engine
+- [x] `python/config.py` — 全パラメータ（ZMQ/OSC ports, YOLO settings, SC mapping）
+- [x] `python/core/analyzer_base.py` — 抽象基底クラス
+- [x] `python/core/engine.py` — AnalysisEngine（スレッド管理、meta-analyzerフック）
+- [x] `python/transport/zmq_publisher.py` — ZMQ PUB + MessagePack
+- [x] `python/transport/osc_broadcaster.py` — OSC UDP → port 9000 + 57120
+- [ ] `python/analyzers/yolo_analyzer.py` — YOLODetect/Pose/Seg（MPS backend）
+- [ ] `python/analyzers/optical_flow_analyzer.py` — Farneback + Lucas-Kanade
+- [ ] `python/analyzers/mediapipe_analyzer.py` — 33点骨格
+- [ ] `python/analyzers/depth_analyzer.py` — Depth Anything v2（optional）
+- [ ] `python/analyzers/event_analyzer.py` — 離散イベント検出 → SC `/trigger/*`
+- [ ] `python/analyzers/particle_analyzer.py` — フロー → パーティクル spawn データ
+- [x] `python/main.py` — エントリポイント（CLI args）
+- [x] `python/requirements.txt`

@@ -1,2 +1,5 @@
 # errors log
 # append runtime or build failures here when a hat cannot complete cleanly
+[2026-03-19T07:39:46Z] ls failure | python directories missing during Python Builder start
+[2026-03-19T07:41:44Z] import check failure | python command not found, retry with python3
+[2026-03-19T07:43:19Z] scratchpad update failure | unquoted heredoc expanded while appending notes
