@@ -7,6 +7,7 @@ import math
 import subprocess
 import sys
 import wave
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -88,6 +89,15 @@ class AudioPreset:
     reverb_mix: float
     width: float
     event_gain: float
+    texture_mode: str
+    lowpass_hz: float
+    highpass_hz: float
+    drive: float
+    ring_mix: float
+    crush_mix: float
+    chorus_mix: float
+    tremolo_rate: float
+    event_mode: str
 
 
 @dataclass(frozen=True)
@@ -133,12 +143,12 @@ VISUAL_FAMILIES = [
 
 
 AUDIO_PRESETS = [
-    AudioPreset("glass-cavern", "Glass Cavern", 0.02, "fm", 0.16, 0.2, 0.08, 2.1, 2.8, 0.22, 0.28, 0.26, 0.24, 0.36, 0.82),
-    AudioPreset("machine-ritual", "Machine Ritual", -0.04, "pulse", 0.22, 0.48, 0.04, 1.0, 0.0, 0.04, 0.14, 0.18, 0.1, 0.14, 0.96),
-    AudioPreset("tidal-halo", "Tidal Halo", 0.09, "sine", 0.14, 0.12, 0.12, 1.6, 1.4, 0.26, 0.34, 0.34, 0.28, 0.52, 0.74),
-    AudioPreset("ember-choir", "Ember Choir", -0.01, "tri", 0.18, 0.26, 0.06, 1.5, 1.2, 0.18, 0.18, 0.22, 0.18, 0.3, 0.88),
-    AudioPreset("submerged-brass", "Submerged Brass", -0.08, "saw", 0.21, 0.42, 0.03, 1.25, 0.8, 0.06, 0.12, 0.16, 0.1, 0.18, 0.92),
-    AudioPreset("shattered-lattice", "Shattered Lattice", 0.14, "blend", 0.15, 0.08, 0.16, 2.8, 3.2, 0.3, 0.3, 0.3, 0.26, 0.58, 0.78),
+    AudioPreset("glass-cavern", "Glass Cavern", 0.02, "fm", 0.16, 0.2, 0.08, 2.1, 2.8, 0.22, 0.28, 0.26, 0.24, 0.36, 0.82, "glass", 9800.0, 110.0, 0.12, 0.22, 0.0, 0.08, 0.21, "glass"),
+    AudioPreset("machine-ritual", "Machine Ritual", -0.04, "pulse", 0.22, 0.48, 0.04, 1.0, 0.0, 0.04, 0.14, 0.18, 0.1, 0.14, 0.96, "pulsebed", 5400.0, 90.0, 0.28, 0.34, 0.08, 0.02, 0.36, "pulse"),
+    AudioPreset("tidal-halo", "Tidal Halo", 0.09, "sine", 0.14, 0.12, 0.12, 1.6, 1.4, 0.26, 0.34, 0.34, 0.28, 0.52, 0.74, "halo", 7600.0, 70.0, 0.08, 0.12, 0.0, 0.16, 0.14, "halo"),
+    AudioPreset("ember-choir", "Ember Choir", -0.01, "tri", 0.18, 0.26, 0.06, 1.5, 1.2, 0.18, 0.18, 0.22, 0.18, 0.3, 0.88, "choir", 6200.0, 120.0, 0.18, 0.08, 0.0, 0.1, 0.18, "choir"),
+    AudioPreset("submerged-brass", "Submerged Brass", -0.08, "saw", 0.21, 0.42, 0.03, 1.25, 0.8, 0.06, 0.12, 0.16, 0.1, 0.18, 0.92, "brass", 3800.0, 60.0, 0.24, 0.16, 0.0, 0.04, 0.12, "brass"),
+    AudioPreset("shattered-lattice", "Shattered Lattice", 0.14, "blend", 0.15, 0.08, 0.16, 2.8, 3.2, 0.3, 0.3, 0.3, 0.26, 0.58, 0.78, "glitch", 11200.0, 180.0, 0.34, 0.42, 0.28, 0.12, 0.42, "shard"),
 ]
 
 
@@ -255,7 +265,689 @@ def analyze_video(video_path: Path, width: int, max_frames: int) -> VideoAnalysi
 
     if not frames:
         raise RuntimeError(f"No frames were decoded from {video_path}")
+    stabilize_preview_analysis(frames)
     return VideoAnalysis(video_path, source_fps, render_size, frames)
+
+
+def stabilize_preview_analysis(frames: list[FrameAnalysis]) -> None:
+    tracked = track_subject_geometries([frame.source_bgr for frame in frames])
+    if not tracked:
+        return
+
+    com_array = np.array([entry["com"] for entry in tracked], dtype=np.float32)
+    area_array = np.array([float(entry["area"]) for entry in tracked], dtype=np.float32)
+    keypoint_array = np.array([entry["keypoints"] for entry in tracked], dtype=np.float32)
+
+    velocity_array = np.zeros_like(com_array)
+    velocity_array[1:] = com_array[1:] - com_array[:-1]
+    speed_array = np.linalg.norm(velocity_array, axis=1)
+    area_delta = np.zeros(len(area_array), dtype=np.float32)
+    area_delta[1:] = np.abs(area_array[1:] - area_array[:-1])
+    pose_speed = np.clip(speed_array * 18.0 + area_delta * 10.0, 0.0, 1.0)
+    flow_energy = np.clip(speed_array * 28.0 + area_delta * 16.0, 0.0, 1.0)
+    depth_curve = normalize_curve(area_array)
+
+    direction_array = np.zeros(len(frames), dtype=np.float32)
+    last_direction = 0.0
+    for idx in range(len(direction_array)):
+        velocity = velocity_array[idx]
+        if float(np.linalg.norm(velocity)) > 1e-4:
+            last_direction = float(math.atan2(float(velocity[1]), float(velocity[0])))
+        direction_array[idx] = last_direction
+
+    previous_detected = False
+    previous_speed = 0.0
+    previous_flow = 0.0
+    for idx, (frame, subject) in enumerate(zip(frames, tracked)):
+        detected = bool(subject["detected"])
+        com = round_point(subject["com"])
+        bbox = round_box(subject["bbox"])
+        keypoints = round_keypoints(subject["keypoints"], confidence=0.96)
+        polygon = round_polygon(subject["polygon"])
+        mp_landmarks = build_preview_landmarks(subject["keypoints"], subject["polygon"])
+        velocity = keypoint_velocity(keypoint_array[idx - 1] if idx > 0 else None, keypoint_array[idx])
+        sparse_vectors = build_sparse_vectors(
+            keypoint_array[idx - 1] if idx > 0 else None,
+            keypoint_array[idx],
+            velocity_array[idx],
+        )
+        spawn_points = build_spawn_points(subject["keypoints"], subject["com"], float(flow_energy[idx]), float(direction_array[idx]))
+        quadrants = compute_quadrants(subject["polygon"], subject["com"])
+
+        events: list[str] = []
+        current_speed = float(pose_speed[idx])
+        current_flow = float(flow_energy[idx])
+        accel = max(current_speed - previous_speed, 0.0)
+        if detected and not previous_detected:
+            events.append("person_enter")
+        if not detected and previous_detected:
+            events.append("person_exit")
+        if current_speed > 0.16 and previous_speed <= 0.16:
+            events.append("motion_onset")
+        if accel > 0.18:
+            events.append("impact")
+        if current_flow > 0.3 and previous_flow <= 0.3:
+            events.append("flow_burst")
+
+        frame.detect.detected = detected
+        frame.detect.data = {
+            "detections": [
+                {
+                    "id": 0,
+                    "cls": 0,
+                    "name": "person",
+                    "conf": 0.96 if detected else 0.0,
+                    "bbox": bbox,
+                    "cx": com[0],
+                    "cy": com[1],
+                    "frame_size": [frame.source_bgr.shape[1], frame.source_bgr.shape[0]],
+                }
+            ]
+            if detected
+            else []
+        }
+
+        frame.pose.detected = detected
+        frame.pose.data = {
+            "persons": [
+                {
+                    "id": 0,
+                    "keypoints": keypoints,
+                    "velocity": velocity,
+                    "speed": round(current_speed, 4),
+                    "com": com,
+                    "bbox": bbox,
+                }
+            ]
+            if detected
+            else []
+        }
+
+        frame.seg.detected = detected
+        frame.seg.data = {"segments": [{"id": 0, "cls": 0, "conf": 0.92, "polygon": polygon}] if detected else []}
+
+        frame.mediapipe.detected = detected
+        frame.mediapipe.data = {
+            "landmarks_norm": mp_landmarks,
+            "landmarks_world": [[round((point[0] - 0.5) * 2.0, 4), round((0.5 - point[1]) * 2.0, 4), 0.0] for point in mp_landmarks],
+            "velocity": expand_velocity_points(velocity, len(mp_landmarks)),
+            "speed_norm": round(current_speed, 4),
+            "energy": round(current_flow, 4),
+            "com": [com[0], com[1], round(depth_curve[idx] - 0.5, 4)],
+        }
+
+        frame.depth.detected = detected
+        frame.depth.data = {
+            "depth_f16": [
+                [round(float(depth_curve[idx]), 4), round(float(depth_curve[idx] * 0.92), 4)],
+                [round(float(depth_curve[idx] * 1.05), 4), round(float(depth_curve[idx]), 4)],
+            ],
+            "mean": round(float(0.28 + (1.0 - depth_curve[idx]) * 0.34), 4),
+            "com_depth": round(float(depth_curve[idx]), 4),
+            "range": [
+                round(max(float(depth_curve[idx]) - 0.12, 0.0), 4),
+                round(min(float(depth_curve[idx]) + 0.12, 1.0), 4),
+            ],
+        }
+
+        frame.flow.detected = detected
+        frame.flow.data = {
+            "flow_f16": [
+                [round(float(velocity_array[idx][0]), 4), round(float(velocity_array[idx][1]), 4)],
+                [round(float(math.cos(direction_array[idx]) * current_flow), 4), round(float(math.sin(direction_array[idx]) * current_flow), 4)],
+            ],
+            "energy": round(current_flow, 4),
+            "direction": round(float(direction_array[idx]), 4),
+            "quadrants": quadrants,
+        }
+
+        frame.sparse.detected = detected
+        frame.sparse.data = {
+            "vectors": sparse_vectors,
+            "trails": [vector["to"] for vector in sparse_vectors],
+            "count": len(sparse_vectors),
+        }
+
+        frame.particle.detected = detected
+        frame.particle.data = {
+            "spawn_points": spawn_points,
+            "attractors": [{"position": com, "weight": 1.0}],
+            "emitters": [{"position": spawn_points[0] if spawn_points else com, "rate": round(4.0 + current_flow * 18.0, 4)}],
+            "field": [
+                [round(float(math.cos(direction_array[idx]) * current_flow), 4), round(float(math.sin(direction_array[idx]) * current_flow), 4)],
+                [round(float(-math.sin(direction_array[idx]) * current_flow), 4), round(float(math.cos(direction_array[idx]) * current_flow), 4)],
+            ],
+        }
+
+        frame.event.detected = detected
+        frame.event.data = {
+            "events": events,
+            "pose_speed": round(current_speed, 4),
+            "flow_energy": round(current_flow, 4),
+            "com": com,
+        }
+
+        previous_detected = detected
+        previous_speed = current_speed
+        previous_flow = current_flow
+
+
+def track_subject_geometries(frames: list[np.ndarray]) -> list[dict[str, object]]:
+    if not frames:
+        return []
+
+    height, width = frames[0].shape[:2]
+    bg_model = np.zeros((1, 65), dtype=np.float64)
+    fg_model = np.zeros((1, 65), dtype=np.float64)
+    previous_mask: np.ndarray | None = None
+    previous_bbox: tuple[int, int, int, int] | None = None
+    previous_frame: np.ndarray | None = None
+
+    raw_subjects: list[dict[str, object]] = []
+    for frame in frames:
+        motion_mask = make_motion_mask(frame, previous_frame, previous_bbox)
+        candidate_mask = grabcut_subject_mask(frame, previous_mask, previous_bbox, motion_mask, bg_model, fg_model)
+        component = select_primary_component(candidate_mask, previous_bbox, width, height)
+        if component is None:
+            component = previous_mask.copy() if previous_mask is not None else default_subject_mask(width, height)
+        geometry = geometry_from_mask(component)
+        raw_subjects.append(geometry)
+        previous_mask = component
+        previous_bbox = geometry["bbox_px"]  # type: ignore[assignment]
+        previous_frame = frame
+    return smooth_subject_geometries(raw_subjects)
+
+
+def make_motion_mask(
+    frame_bgr: np.ndarray,
+    previous_frame: np.ndarray | None,
+    previous_bbox: tuple[int, int, int, int] | None,
+) -> np.ndarray | None:
+    if previous_frame is None:
+        return None
+    current_gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+    previous_gray = cv2.cvtColor(previous_frame, cv2.COLOR_BGR2GRAY)
+    diff = cv2.absdiff(current_gray, previous_gray)
+    _, motion = cv2.threshold(diff, 14, 255, cv2.THRESH_BINARY)
+    motion = cv2.GaussianBlur(motion, (0, 0), sigmaX=1.8)
+    _, motion = cv2.threshold(motion, 18, 255, cv2.THRESH_BINARY)
+    if previous_bbox is not None:
+        x1, y1, x2, y2 = previous_bbox
+        pad_x = max(18, (x2 - x1) // 2)
+        pad_y = max(18, (y2 - y1) // 2)
+        focus = np.zeros_like(motion)
+        x1 = max(0, x1 - pad_x)
+        y1 = max(0, y1 - pad_y)
+        x2 = min(motion.shape[1], x2 + pad_x)
+        y2 = min(motion.shape[0], y2 + pad_y)
+        focus[y1:y2, x1:x2] = 255
+        motion = cv2.bitwise_and(motion, focus)
+    kernel = np.ones((5, 5), dtype=np.uint8)
+    motion = cv2.morphologyEx(motion, cv2.MORPH_CLOSE, kernel, iterations=1)
+    motion = cv2.dilate(motion, kernel, iterations=1)
+    return motion
+
+
+def grabcut_subject_mask(
+    frame_bgr: np.ndarray,
+    previous_mask: np.ndarray | None,
+    previous_bbox: tuple[int, int, int, int] | None,
+    motion_mask: np.ndarray | None,
+    bg_model: np.ndarray,
+    fg_model: np.ndarray,
+) -> np.ndarray:
+    height, width = frame_bgr.shape[:2]
+    mask = np.full((height, width), cv2.GC_PR_BGD, dtype=np.uint8)
+    mask[:8, :] = cv2.GC_BGD
+    mask[-8:, :] = cv2.GC_BGD
+    mask[:, :8] = cv2.GC_BGD
+    mask[:, -8:] = cv2.GC_BGD
+
+    try:
+        if previous_mask is None:
+            rect = (
+                int(width * 0.34),
+                int(height * 0.12),
+                int(width * 0.32),
+                int(height * 0.74),
+            )
+            cv2.grabCut(frame_bgr, mask, rect, bg_model, fg_model, 3, cv2.GC_INIT_WITH_RECT)
+        else:
+            dilated = cv2.dilate(previous_mask, np.ones((11, 11), dtype=np.uint8), iterations=1)
+            eroded = cv2.erode(previous_mask, np.ones((7, 7), dtype=np.uint8), iterations=1)
+            mask[dilated > 0] = cv2.GC_PR_FGD
+            mask[eroded > 0] = cv2.GC_FGD
+            if previous_bbox is not None:
+                x1, y1, x2, y2 = previous_bbox
+                pad_x = max(16, (x2 - x1) // 3)
+                pad_y = max(16, (y2 - y1) // 3)
+                x1 = max(0, x1 - pad_x)
+                y1 = max(0, y1 - pad_y)
+                x2 = min(width, x2 + pad_x)
+                y2 = min(height, y2 + pad_y)
+                mask[y1:y2, x1:x2] = np.where(mask[y1:y2, x1:x2] == cv2.GC_BGD, cv2.GC_PR_BGD, mask[y1:y2, x1:x2])
+            if motion_mask is not None and int(np.count_nonzero(motion_mask)) > 0:
+                mask[motion_mask > 0] = cv2.GC_PR_FGD
+            cv2.grabCut(frame_bgr, mask, None, bg_model, fg_model, 2, cv2.GC_INIT_WITH_MASK)
+    except cv2.error:
+        return previous_mask.copy() if previous_mask is not None else default_subject_mask(width, height)
+
+    foreground = np.where((mask == cv2.GC_FGD) | (mask == cv2.GC_PR_FGD), 255, 0).astype(np.uint8)
+    kernel = np.ones((5, 5), dtype=np.uint8)
+    foreground = cv2.morphologyEx(foreground, cv2.MORPH_OPEN, kernel, iterations=1)
+    foreground = cv2.morphologyEx(foreground, cv2.MORPH_CLOSE, kernel, iterations=2)
+    return cv2.medianBlur(foreground, 5)
+
+
+def select_primary_component(
+    mask: np.ndarray,
+    previous_bbox: tuple[int, int, int, int] | None,
+    width: int,
+    height: int,
+) -> np.ndarray | None:
+    count, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=8)
+    if count <= 1:
+        return None
+
+    if previous_bbox is None:
+        target_x, target_y = width * 0.5, height * 0.55
+    else:
+        x1, y1, x2, y2 = previous_bbox
+        target_x = (x1 + x2) * 0.5
+        target_y = (y1 + y2) * 0.5
+
+    best_label = 0
+    best_score = -1e9
+    for label in range(1, count):
+        area = int(stats[label, cv2.CC_STAT_AREA])
+        if area < max(220, (width * height) // 500):
+            continue
+        cx, cy = centroids[label]
+        distance = math.hypot(float(cx - target_x), float(cy - target_y))
+        score = float(area) - distance * 18.0
+        if previous_bbox is not None:
+            x1, y1, x2, y2 = previous_bbox
+            if x1 <= cx <= x2 and y1 <= cy <= y2:
+                score += 1200.0
+        if score > best_score:
+            best_score = score
+            best_label = label
+
+    if best_label == 0:
+        return None
+    component = np.where(labels == best_label, 255, 0).astype(np.uint8)
+    if int(np.count_nonzero(component)) > int(width * height * 0.42):
+        return None
+    return component
+
+
+def default_subject_mask(width: int, height: int) -> np.ndarray:
+    mask = np.zeros((height, width), dtype=np.uint8)
+    cv2.ellipse(
+        mask,
+        (width // 2, int(height * 0.56)),
+        (int(width * 0.11), int(height * 0.28)),
+        0,
+        0,
+        360,
+        255,
+        -1,
+        cv2.LINE_AA,
+    )
+    return mask
+
+
+def geometry_from_mask(mask: np.ndarray) -> dict[str, object]:
+    height, width = mask.shape[:2]
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return fallback_geometry(width, height)
+
+    contour = max(contours, key=cv2.contourArea)
+    area = float(cv2.contourArea(contour)) / float(max(width * height, 1))
+    if area <= 1e-4:
+        return fallback_geometry(width, height)
+
+    x, y, w, h = cv2.boundingRect(contour)
+    bbox_px = (x, y, x + w, y + h)
+    moments = cv2.moments(contour)
+    if abs(moments["m00"]) > 1e-6:
+        center_x = float(moments["m10"] / moments["m00"])
+        center_y = float(moments["m01"] / moments["m00"])
+    else:
+        center_x = x + w * 0.5
+        center_y = y + h * 0.5
+
+    hull = cv2.convexHull(contour).reshape(-1, 2).astype(np.float32)
+    hull = normalize_polygon_start(hull)
+    polygon_px = resample_closed_polygon(hull, 24)
+    keypoints = keypoints_from_mask(mask, bbox_px)
+
+    return {
+        "detected": True,
+        "com": [center_x / max(width - 1, 1), center_y / max(height - 1, 1)],
+        "bbox": px_box_to_norm(bbox_px, width, height),
+        "bbox_px": bbox_px,
+        "polygon": px_points_to_norm(polygon_px, width, height),
+        "keypoints": keypoints,
+        "area": area,
+    }
+
+
+def fallback_geometry(width: int, height: int) -> dict[str, object]:
+    bbox_px = (int(width * 0.4), int(height * 0.18), int(width * 0.6), int(height * 0.88))
+    polygon_px = np.array(
+        [
+            [bbox_px[0], bbox_px[1]],
+            [bbox_px[2], bbox_px[1]],
+            [bbox_px[2], bbox_px[3]],
+            [bbox_px[0], bbox_px[3]],
+        ],
+        dtype=np.float32,
+    )
+    return {
+        "detected": False,
+        "com": [0.5, 0.55],
+        "bbox": px_box_to_norm(bbox_px, width, height),
+        "bbox_px": bbox_px,
+        "polygon": px_points_to_norm(resample_closed_polygon(polygon_px, 24), width, height),
+        "keypoints": default_keypoints(),
+        "area": 0.04,
+    }
+
+
+def keypoints_from_mask(mask: np.ndarray, bbox_px: tuple[int, int, int, int]) -> list[list[float]]:
+    height, width = mask.shape[:2]
+    x1, y1, x2, y2 = bbox_px
+    box_height = max(y2 - y1, 1)
+
+    head_left, head_right = row_bounds(mask, x1, x2, y1 + int(box_height * 0.16))
+    shoulder_left, shoulder_right = row_bounds(mask, x1, x2, y1 + int(box_height * 0.28))
+    elbow_left, elbow_right = row_bounds(mask, x1, x2, y1 + int(box_height * 0.44))
+    wrist_left, wrist_right = row_bounds(mask, x1, x2, y1 + int(box_height * 0.62))
+    hip_left, hip_right = row_bounds(mask, x1, x2, y1 + int(box_height * 0.58))
+    knee_left, knee_right = row_bounds(mask, x1, x2, y1 + int(box_height * 0.8))
+    ankle_left, ankle_right = row_bounds(mask, x1, x2, y1 + int(box_height * 0.96))
+
+    head_width = max(head_right - head_left, 6.0)
+    head_center_x = (head_left + head_right) * 0.5
+    nose = [head_center_x / max(width - 1, 1), (y1 + box_height * 0.12) / max(height - 1, 1)]
+    left_eye = [(head_center_x - head_width * 0.1) / max(width - 1, 1), (y1 + box_height * 0.1) / max(height - 1, 1)]
+    right_eye = [(head_center_x + head_width * 0.1) / max(width - 1, 1), (y1 + box_height * 0.1) / max(height - 1, 1)]
+    left_ear = [(head_center_x - head_width * 0.22) / max(width - 1, 1), (y1 + box_height * 0.12) / max(height - 1, 1)]
+    right_ear = [(head_center_x + head_width * 0.22) / max(width - 1, 1), (y1 + box_height * 0.12) / max(height - 1, 1)]
+
+    left_shoulder, right_shoulder = inset_pair(shoulder_left, shoulder_right, y1 + box_height * 0.28, 0.12, width, height)
+    left_elbow, right_elbow = inset_pair(elbow_left, elbow_right, y1 + box_height * 0.45, 0.08, width, height)
+    left_wrist, right_wrist = inset_pair(wrist_left, wrist_right, y1 + box_height * 0.62, 0.03, width, height)
+    left_hip, right_hip = inset_pair(hip_left, hip_right, y1 + box_height * 0.58, 0.18, width, height)
+    left_knee, right_knee = inset_pair(knee_left, knee_right, y1 + box_height * 0.8, 0.28, width, height)
+    left_ankle, right_ankle = inset_pair(ankle_left, ankle_right, y1 + box_height * 0.97, 0.34, width, height)
+
+    return [
+        clip_point(nose),
+        clip_point(left_eye),
+        clip_point(right_eye),
+        clip_point(left_ear),
+        clip_point(right_ear),
+        left_shoulder,
+        right_shoulder,
+        left_elbow,
+        right_elbow,
+        left_wrist,
+        right_wrist,
+        left_hip,
+        right_hip,
+        left_knee,
+        right_knee,
+        left_ankle,
+        right_ankle,
+    ]
+
+
+def default_keypoints() -> list[list[float]]:
+    return [
+        [0.5, 0.26],
+        [0.48, 0.24],
+        [0.52, 0.24],
+        [0.46, 0.26],
+        [0.54, 0.26],
+        [0.44, 0.38],
+        [0.56, 0.38],
+        [0.42, 0.5],
+        [0.58, 0.5],
+        [0.4, 0.64],
+        [0.6, 0.64],
+        [0.46, 0.56],
+        [0.54, 0.56],
+        [0.46, 0.78],
+        [0.54, 0.78],
+        [0.46, 0.94],
+        [0.54, 0.94],
+    ]
+
+
+def row_bounds(mask: np.ndarray, x1: int, x2: int, y: int) -> tuple[float, float]:
+    height, width = mask.shape[:2]
+    y1 = max(0, min(height - 1, y - 2))
+    y2 = max(y1 + 1, min(height, y + 3))
+    pad = max(8, (x2 - x1) // 6)
+    x1 = max(0, x1 - pad)
+    x2 = min(width, x2 + pad)
+    band = mask[y1:y2, x1:x2]
+    xs = np.where(band > 0)[1]
+    if xs.size == 0:
+        return float(x1), float(x2)
+    return float(x1 + int(xs.min())), float(x1 + int(xs.max()))
+
+
+def inset_pair(left: float, right: float, y: float, inset: float, width: int, height: int) -> tuple[list[float], list[float]]:
+    span = max(right - left, 1.0)
+    left_point = [float((left + span * inset) / max(width - 1, 1)), float(y / max(height - 1, 1))]
+    right_point = [float((right - span * inset) / max(width - 1, 1)), float(y / max(height - 1, 1))]
+    return clip_point(left_point), clip_point(right_point)
+
+
+def normalize_polygon_start(points: np.ndarray) -> np.ndarray:
+    if len(points) == 0:
+        return points
+    order = np.lexsort((points[:, 0], points[:, 1]))
+    return np.roll(points, -int(order[0]), axis=0)
+
+
+def resample_closed_polygon(points: np.ndarray, count: int) -> np.ndarray:
+    if len(points) == 0:
+        return np.zeros((count, 2), dtype=np.float32)
+    if len(points) == 1:
+        return np.repeat(points.astype(np.float32), count, axis=0)
+    closed = np.vstack([points, points[0]])
+    segment_lengths = np.linalg.norm(np.diff(closed, axis=0), axis=1)
+    total_length = float(segment_lengths.sum())
+    if total_length <= 1e-6:
+        return np.repeat(points[:1].astype(np.float32), count, axis=0)
+
+    samples = np.linspace(0.0, total_length, count, endpoint=False)
+    result = np.zeros((count, 2), dtype=np.float32)
+    cursor = 0
+    accumulated = 0.0
+    for index, sample in enumerate(samples):
+        while cursor < len(segment_lengths) - 1 and accumulated + float(segment_lengths[cursor]) < sample:
+            accumulated += float(segment_lengths[cursor])
+            cursor += 1
+        local = (sample - accumulated) / max(float(segment_lengths[cursor]), 1e-6)
+        result[index] = closed[cursor] + (closed[cursor + 1] - closed[cursor]) * local
+    return result
+
+
+def px_box_to_norm(bbox_px: tuple[int, int, int, int], width: int, height: int) -> list[float]:
+    x1, y1, x2, y2 = bbox_px
+    return [
+        float(x1 / max(width - 1, 1)),
+        float(y1 / max(height - 1, 1)),
+        float(x2 / max(width - 1, 1)),
+        float(y2 / max(height - 1, 1)),
+    ]
+
+
+def px_points_to_norm(points: np.ndarray, width: int, height: int) -> list[list[float]]:
+    return [[float(point[0] / max(width - 1, 1)), float(point[1] / max(height - 1, 1))] for point in points]
+
+
+def smooth_subject_geometries(raw_subjects: list[dict[str, object]]) -> list[dict[str, object]]:
+    com = smooth_curve(np.array([entry["com"] for entry in raw_subjects], dtype=np.float32), radius=4)
+    bbox = smooth_curve(np.array([entry["bbox"] for entry in raw_subjects], dtype=np.float32), radius=4)
+    polygon = smooth_curve(np.array([entry["polygon"] for entry in raw_subjects], dtype=np.float32), radius=5)
+    keypoints = smooth_curve(np.array([entry["keypoints"] for entry in raw_subjects], dtype=np.float32), radius=4)
+    area = smooth_curve(np.array([float(entry["area"]) for entry in raw_subjects], dtype=np.float32), radius=6)
+
+    stabilized: list[dict[str, object]] = []
+    for index, entry in enumerate(raw_subjects):
+        stabilized.append(
+            {
+                "detected": bool(entry["detected"]),
+                "com": clip_point(com[index].tolist()),
+                "bbox": clip_box(bbox[index].tolist()),
+                "bbox_px": entry["bbox_px"],
+                "polygon": clip_points(polygon[index].tolist()),
+                "keypoints": clip_points(keypoints[index].tolist()),
+                "area": float(np.clip(area[index], 0.0, 1.0)),
+            }
+        )
+    return stabilized
+
+
+def smooth_curve(values: np.ndarray, radius: int) -> np.ndarray:
+    if radius <= 0 or len(values) < 2:
+        return values.astype(np.float32, copy=True)
+    weights = np.hanning(radius * 2 + 1)
+    if not np.any(weights):
+        weights = np.ones(radius * 2 + 1, dtype=np.float64)
+    weights = weights / weights.sum()
+    pad_spec = [(radius, radius)] + [(0, 0)] * (values.ndim - 1)
+    padded = np.pad(values.astype(np.float64), pad_spec, mode="edge")
+    result = np.empty_like(values, dtype=np.float64)
+    for index in range(len(values)):
+        window = padded[index : index + len(weights)]
+        result[index] = np.tensordot(weights, window, axes=(0, 0))
+    return result.astype(np.float32)
+
+
+def normalize_curve(values: np.ndarray) -> np.ndarray:
+    if len(values) == 0:
+        return values
+    minimum = float(np.min(values))
+    maximum = float(np.max(values))
+    if maximum - minimum <= 1e-6:
+        return np.full_like(values, 0.5)
+    return ((values - minimum) / (maximum - minimum)).astype(np.float32)
+
+
+def build_preview_landmarks(keypoints: list[list[float]], polygon: list[list[float]]) -> list[list[float]]:
+    landmarks: list[list[float]] = []
+    for point in keypoints:
+        landmarks.append([round(float(point[0]), 4), round(float(point[1]), 4), 0.0, 0.92])
+    for point in polygon:
+        if len(landmarks) >= 33:
+            break
+        landmarks.append([round(float(point[0]), 4), round(float(point[1]), 4), 0.0, 0.84])
+    while len(landmarks) < 33:
+        fill = landmarks[-1] if landmarks else [0.5, 0.5, 0.0, 0.8]
+        landmarks.append(list(fill))
+    return landmarks[:33]
+
+
+def keypoint_velocity(previous: np.ndarray | None, current: np.ndarray) -> list[list[float]]:
+    if previous is None or len(previous) != len(current):
+        delta = np.zeros_like(current)
+    else:
+        delta = current - previous
+    return [[round(float(point[0]), 4), round(float(point[1]), 4)] for point in delta]
+
+
+def expand_velocity_points(points: list[list[float]], count: int) -> list[list[float]]:
+    if not points:
+        return [[0.0, 0.0] for _ in range(count)]
+    expanded = list(points)
+    while len(expanded) < count:
+        expanded.append(list(expanded[-1]))
+    return expanded[:count]
+
+
+def build_sparse_vectors(previous: np.ndarray | None, current: np.ndarray, velocity: np.ndarray) -> list[dict[str, object]]:
+    anchors = [5, 6, 11, 12]
+    vectors: list[dict[str, object]] = []
+    for anchor in anchors:
+        end = clip_point(current[anchor].tolist())
+        if previous is None:
+            start = clip_point([end[0] - float(velocity[0]) * 2.0, end[1] - float(velocity[1]) * 2.0])
+        else:
+            start = clip_point(previous[anchor].tolist())
+        delta_x = end[0] - start[0]
+        delta_y = end[1] - start[1]
+        vectors.append(
+            {
+                "from": round_point(start),
+                "to": round_point(end),
+                "vel": [round(delta_x, 4), round(delta_y, 4)],
+                "speed": round(float(math.hypot(delta_x, delta_y) * 52.0), 4),
+            }
+        )
+    return vectors
+
+
+def build_spawn_points(keypoints: list[list[float]], com: list[float], flow_energy: float, direction: float) -> list[list[float]]:
+    points = [keypoints[index] for index in (0, 9, 10, 15, 16)]
+    radius = 0.04 + flow_energy * 0.08
+    points.append([com[0] + math.cos(direction) * radius, com[1] + math.sin(direction) * radius])
+    return [round_point(clip_point(point)) for point in points]
+
+
+def compute_quadrants(polygon: list[list[float]], com: list[float]) -> dict[str, float]:
+    if not polygon:
+        return {"tl": 0.0, "tr": 0.0, "bl": 0.0, "br": 0.0}
+    counts = {"tl": 0, "tr": 0, "bl": 0, "br": 0}
+    for point in polygon:
+        if point[0] <= com[0] and point[1] <= com[1]:
+            counts["tl"] += 1
+        elif point[0] > com[0] and point[1] <= com[1]:
+            counts["tr"] += 1
+        elif point[0] <= com[0] and point[1] > com[1]:
+            counts["bl"] += 1
+        else:
+            counts["br"] += 1
+    total = max(sum(counts.values()), 1)
+    return {key: round(value / total, 4) for key, value in counts.items()}
+
+
+def round_point(point: Iterable[float]) -> list[float]:
+    values = list(point)
+    return [round(float(values[0]), 4), round(float(values[1]), 4)]
+
+
+def round_box(box: Iterable[float]) -> list[float]:
+    return [round(float(value), 4) for value in box]
+
+
+def round_polygon(points: list[list[float]]) -> list[list[float]]:
+    return [round_point(point) for point in points]
+
+
+def round_keypoints(points: list[list[float]], confidence: float) -> list[list[float]]:
+    return [[round(float(point[0]), 4), round(float(point[1]), 4), round(confidence, 4)] for point in points]
+
+
+def clip_point(point: Iterable[float]) -> list[float]:
+    values = list(point)
+    return [float(np.clip(values[0], 0.0, 1.0)), float(np.clip(values[1], 0.0, 1.0))]
+
+
+def clip_points(points: list[list[float]]) -> list[list[float]]:
+    return [clip_point(point) for point in points]
+
+
+def clip_box(box: list[float]) -> list[float]:
+    x1, y1, x2, y2 = [float(np.clip(value, 0.0, 1.0)) for value in box]
+    return [min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)]
 
 
 def ensure_even(value: int) -> int:
@@ -618,22 +1310,40 @@ def synthesize_audio(video: VideoAnalysis, variant: Variant, sample_rate: int, f
     com_x = com[:, 0]
     com_y = com[:, 1]
 
-    freq_curve = np.interp(sample_times, frame_times, 65.0 + (1.0 - com_y) * 420.0)
+    variant_seed = zlib.crc32(variant.slug.encode("utf-8")) & 0xFFFFFFFF
+    rng = np.random.default_rng(variant_seed)
+    detune = 1.0 + (((variant_seed % 19) - 9) * 0.0018)
+    hue_bias = 0.94 + variant.visual.base_hue * 0.14
+
+    freq_curve = np.interp(sample_times, frame_times, 65.0 + (1.0 - com_y) * 420.0) * detune * hue_bias
     speed_curve = np.interp(sample_times, frame_times, pose_speed)
     flow_curve = np.interp(sample_times, frame_times, flow_energy)
     depth_curve = np.interp(sample_times, frame_times, depth)
     pan_curve = np.interp(sample_times, frame_times, (com_x - 0.5) * variant.audio.width * 1.8)
-    amp_curve = variant.audio.base_gain * (0.18 + speed_curve * 0.9)
+    amp_curve = variant.audio.base_gain * (0.18 + speed_curve * (0.86 + variant.visual.flow_gain * 0.12))
 
     phase = np.cumsum((2.0 * math.pi * freq_curve) / sample_rate)
-    body = oscillator_bank(phase, flow_curve, depth_curve, variant.audio)
+    body = oscillator_bank(phase, flow_curve, depth_curve, variant.audio, variant.visual)
+    bed = texture_bed(sample_times, phase, freq_curve, flow_curve, depth_curve, variant.audio, variant.visual)
     sub = np.sin(phase * 0.5) * variant.audio.sub_mix
-    shimmer = np.sin(phase * (2.0 + depth_curve * 2.2)) * (variant.audio.shimmer_mix * (0.2 + flow_curve))
-
-    rng = np.random.default_rng(abs(hash(variant.slug)) & 0xFFFFFFFF)
+    shimmer = np.sin(phase * (2.0 + depth_curve * (2.2 + variant.visual.flow_gain))) * (variant.audio.shimmer_mix * (0.16 + flow_curve))
+    ring = body * np.sin(phase * (1.15 + depth_curve * (1.0 + variant.audio.fm_ratio * 0.35))) * variant.audio.ring_mix
     noise = rng.standard_normal(total_samples) * variant.audio.noise_mix * (0.08 + flow_curve * 0.28)
 
-    mono = (body + sub + shimmer + noise) * amp_curve
+    mono = (body + bed + sub + shimmer + ring + noise) * amp_curve
+    mono = apply_tremolo(mono, sample_times, variant.audio.tremolo_rate * (0.85 + variant.visual.flow_gain * 0.2), 0.08 + variant.visual.edge_mix * 0.22)
+    mono = apply_one_pole_filter(mono, max(variant.audio.highpass_hz, 24.0), sample_rate, "highpass")
+    mono = apply_one_pole_filter(
+        mono,
+        min(variant.audio.lowpass_hz * (0.86 + depth_curve * 0.28).mean(), sample_rate * 0.45),
+        sample_rate,
+        "lowpass",
+    )
+    if variant.audio.crush_mix > 0.0:
+        crushed = bitcrush(mono, 14 - int(variant.audio.crush_mix * 8), hold=max(1, int(1 + variant.visual.scanlines * 12)))
+        mono = mono * (1.0 - variant.audio.crush_mix) + crushed * variant.audio.crush_mix
+    mono = saturate(mono, variant.audio.drive + variant.visual.edge_mix * 0.18)
+
     stereo = np.column_stack(
         [
             mono * (1.0 - np.clip(pan_curve, -1.0, 1.0)) * 0.5,
@@ -650,16 +1360,72 @@ def synthesize_audio(video: VideoAnalysis, variant: Variant, sample_rate: int, f
         pan = (float(frame.event.data.get("com", [0.5, 0.5])[0]) - 0.5) * 1.4
         for event in events:
             if event == "motion_onset":
-                add_event_tone(stereo, onset_sample, sample_rate, 0.16, freq * 1.8, freq * 0.95, 0.26 * variant.audio.event_gain, pan, "sine")
+                add_event_tone(
+                    stereo,
+                    onset_sample,
+                    sample_rate,
+                    0.16,
+                    freq * 1.8,
+                    freq * 0.95,
+                    0.26 * variant.audio.event_gain,
+                    pan,
+                    event_tone_mode(variant.audio, event),
+                )
             elif event == "impact":
-                add_event_tone(stereo, onset_sample, sample_rate, 0.24, freq * 0.9, freq * 0.42, 0.44 * variant.audio.event_gain, pan, "thump")
+                add_event_tone(
+                    stereo,
+                    onset_sample,
+                    sample_rate,
+                    0.24,
+                    freq * 0.9,
+                    freq * 0.42,
+                    0.44 * variant.audio.event_gain,
+                    pan,
+                    event_tone_mode(variant.audio, event),
+                )
             elif event == "person_enter":
-                add_event_tone(stereo, onset_sample, sample_rate, 0.72, freq * 0.65, freq * 2.2, 0.24 * variant.audio.event_gain, pan, "saw")
+                add_event_tone(
+                    stereo,
+                    onset_sample,
+                    sample_rate,
+                    0.72,
+                    freq * 0.65,
+                    freq * 2.2,
+                    0.24 * variant.audio.event_gain,
+                    pan,
+                    event_tone_mode(variant.audio, event),
+                )
             elif event == "person_exit":
-                add_event_tone(stereo, onset_sample, sample_rate, 0.68, freq * 1.6, freq * 0.38, 0.18 * variant.audio.event_gain, pan, "tri")
+                add_event_tone(
+                    stereo,
+                    onset_sample,
+                    sample_rate,
+                    0.68,
+                    freq * 1.6,
+                    freq * 0.38,
+                    0.18 * variant.audio.event_gain,
+                    pan,
+                    event_tone_mode(variant.audio, event),
+                )
             elif event == "flow_burst":
-                add_event_tone(stereo, onset_sample, sample_rate, 0.42, freq * 2.4, freq * 1.2, 0.24 * variant.audio.event_gain, pan, "noise")
+                add_event_tone(
+                    stereo,
+                    onset_sample,
+                    sample_rate,
+                    0.42,
+                    freq * 2.4,
+                    freq * 1.2,
+                    0.24 * variant.audio.event_gain,
+                    pan,
+                    event_tone_mode(variant.audio, event),
+                )
 
+    stereo = apply_chorus(
+        stereo,
+        sample_rate,
+        variant.audio.chorus_mix * (0.7 + variant.visual.particle_gain * 0.24),
+        0.16 + variant.visual.flow_gain * 0.18,
+    )
     stereo = apply_delay(stereo, sample_rate, variant.audio.delay_time, variant.audio.delay_mix)
     stereo = apply_reverb(stereo, sample_rate, variant.audio.reverb_mix)
     peak = np.max(np.abs(stereo)) if stereo.size else 1.0
@@ -668,12 +1434,12 @@ def synthesize_audio(video: VideoAnalysis, variant: Variant, sample_rate: int, f
     return stereo.astype(np.float32)
 
 
-def oscillator_bank(phase: np.ndarray, flow: np.ndarray, depth: np.ndarray, preset: AudioPreset) -> np.ndarray:
+def oscillator_bank(phase: np.ndarray, flow: np.ndarray, depth: np.ndarray, preset: AudioPreset, visual: VisualFamily) -> np.ndarray:
     sine = np.sin(phase)
     tri = (2.0 / math.pi) * np.arcsin(np.sin(phase))
     saw = 2.0 * ((phase / (2.0 * math.pi)) % 1.0) - 1.0
     pulse = np.where(np.sin(phase) > 0.1, 1.0, -1.0)
-    fm = np.sin(phase + np.sin(phase * preset.fm_ratio) * (preset.fm_index * (0.25 + flow * 1.4)))
+    fm = np.sin(phase + np.sin(phase * preset.fm_ratio) * (preset.fm_index * (0.2 + flow * (1.2 + visual.flow_gain * 0.2))))
 
     if preset.oscillator == "sine":
         return sine * 0.8 + fm * 0.2
@@ -686,6 +1452,104 @@ def oscillator_bank(phase: np.ndarray, flow: np.ndarray, depth: np.ndarray, pres
     if preset.oscillator == "fm":
         return fm * 0.78 + sine * 0.22
     return sine * 0.28 + saw * 0.24 + tri * 0.2 + fm * 0.28 + np.sin(phase * (3.0 + depth * 1.2)) * 0.08
+
+
+def texture_bed(
+    sample_times: np.ndarray,
+    phase: np.ndarray,
+    freq_curve: np.ndarray,
+    flow_curve: np.ndarray,
+    depth_curve: np.ndarray,
+    preset: AudioPreset,
+    visual: VisualFamily,
+) -> np.ndarray:
+    if preset.texture_mode == "glass":
+        partial_a = np.sin(phase * (2.8 + depth_curve * 1.1))
+        partial_b = np.sin(phase * (5.2 + flow_curve * 2.4))
+        return (partial_a * 0.14 + partial_b * 0.1) * (0.24 + flow_curve * 0.56)
+    if preset.texture_mode == "pulsebed":
+        rhythm = np.sign(np.sin(sample_times * math.tau * (3.2 + visual.scanlines * 12.0)))
+        return rhythm * np.sin(phase * 0.5) * (0.08 + flow_curve * 0.18)
+    if preset.texture_mode == "halo":
+        slow = np.sin(sample_times * math.tau * 0.18) * 0.5 + 0.5
+        return np.sin(phase * (1.0 + depth_curve * 0.22)) * (0.12 + slow * 0.12)
+    if preset.texture_mode == "choir":
+        vowel = np.sin(phase * 2.0) * 0.12 + np.sin(phase * 3.1) * 0.08
+        return vowel * (0.32 + depth_curve * 0.38)
+    if preset.texture_mode == "brass":
+        brassy = (2.0 * ((phase * 1.01 / (2.0 * math.pi)) % 1.0) - 1.0) * 0.16
+        return brassy + np.sin(phase * 1.5) * (0.08 + flow_curve * 0.08)
+    if preset.texture_mode == "glitch":
+        stepped = np.sin(phase * (1.0 + visual.edge_mix * 3.2))
+        return bitcrush(stepped, bits=7, hold=4) * (0.16 + flow_curve * 0.18)
+    return np.zeros_like(freq_curve)
+
+
+def event_tone_mode(preset: AudioPreset, event: str) -> str:
+    if preset.event_mode == "glass":
+        return {"motion_onset": "glass", "impact": "shard", "person_enter": "halo", "person_exit": "tri", "flow_burst": "noise"}[event]
+    if preset.event_mode == "pulse":
+        return {"motion_onset": "pulse", "impact": "thump", "person_enter": "saw", "person_exit": "tri", "flow_burst": "noise"}[event]
+    if preset.event_mode == "halo":
+        return {"motion_onset": "halo", "impact": "sine", "person_enter": "halo", "person_exit": "tri", "flow_burst": "noise"}[event]
+    if preset.event_mode == "choir":
+        return {"motion_onset": "choir", "impact": "thump", "person_enter": "choir", "person_exit": "tri", "flow_burst": "noise"}[event]
+    if preset.event_mode == "brass":
+        return {"motion_onset": "brass", "impact": "thump", "person_enter": "saw", "person_exit": "tri", "flow_burst": "noise"}[event]
+    return {"motion_onset": "shard", "impact": "thump", "person_enter": "glass", "person_exit": "tri", "flow_burst": "noise"}[event]
+
+
+def apply_tremolo(signal: np.ndarray, sample_times: np.ndarray, rate: float, depth: float) -> np.ndarray:
+    if rate <= 0.0 or depth <= 0.0:
+        return signal
+    lfo = 1.0 - depth + (np.sin(sample_times * math.tau * rate) * 0.5 + 0.5) * depth
+    return signal * lfo
+
+
+def apply_one_pole_filter(signal: np.ndarray, cutoff_hz: float, sample_rate: int, mode: str) -> np.ndarray:
+    cutoff_hz = float(np.clip(cutoff_hz, 24.0, sample_rate * 0.45))
+    alpha = math.exp(-(2.0 * math.pi * cutoff_hz) / sample_rate)
+    output = np.zeros_like(signal)
+    low = 0.0
+    for index, sample in enumerate(signal):
+        low = (1.0 - alpha) * sample + alpha * low
+        output[index] = low if mode == "lowpass" else sample - low
+    return output
+
+
+def saturate(signal: np.ndarray, drive: float) -> np.ndarray:
+    if drive <= 0.0:
+        return signal
+    amount = 1.0 + drive * 6.0
+    return np.tanh(signal * amount) / np.tanh(amount)
+
+
+def bitcrush(signal: np.ndarray, bits: int, hold: int) -> np.ndarray:
+    bits = max(4, bits)
+    levels = float((2 ** bits) - 1)
+    crushed = np.round(signal * levels) / levels
+    if hold <= 1:
+        return crushed
+    held = crushed.copy()
+    for index in range(hold, len(held)):
+        held[index] = held[index - (index % hold)]
+    return held
+
+
+def apply_chorus(stereo: np.ndarray, sample_rate: int, mix: float, rate: float) -> np.ndarray:
+    if mix <= 0.0:
+        return stereo
+    wet = stereo.copy()
+    phase = 0.0
+    for index in range(len(stereo)):
+        phase += (math.tau * rate) / sample_rate
+        modulation = (math.sin(phase) * 0.5 + 0.5)
+        delay_samples = int((0.008 + modulation * 0.012) * sample_rate)
+        if index <= delay_samples:
+            continue
+        wet[index, 0] += stereo[index - delay_samples, 1] * mix * 0.35
+        wet[index, 1] += stereo[index - delay_samples, 0] * mix * 0.35
+    return wet
 
 
 def add_event_tone(
@@ -713,10 +1577,26 @@ def add_event_tone(
         wave_data = (2.0 * ((phase / (2.0 * math.pi)) % 1.0) - 1.0) * env
     elif mode == "tri":
         wave_data = ((2.0 / math.pi) * np.arcsin(np.sin(phase))) * env
+    elif mode == "pulse":
+        wave_data = np.where(np.sin(phase) > 0.0, 1.0, -1.0) * env * 0.72
     elif mode == "thump":
         click = np.sin(phase * 0.5) * np.exp(-7.5 * time_axis)
         crack = np.sin(phase * 2.0) * np.exp(-18.0 * time_axis) * 0.3
         wave_data = click + crack
+    elif mode == "glass":
+        shimmer = np.sin(phase * 1.8 + np.sin(phase * 3.4) * 0.7) * np.exp(-7.0 * time_axis)
+        ping = np.sin(phase * 4.8) * np.exp(-18.0 * time_axis) * 0.2
+        wave_data = shimmer + ping
+    elif mode == "halo":
+        wave_data = (np.sin(phase) * 0.7 + np.sin(phase * 0.5) * 0.3) * np.exp(-2.2 * time_axis)
+    elif mode == "choir":
+        wave_data = (np.sin(phase) * 0.55 + np.sin(phase * 2.02) * 0.24 + np.sin(phase * 3.14) * 0.14) * np.exp(-3.6 * time_axis)
+    elif mode == "brass":
+        saw = 2.0 * ((phase / (2.0 * math.pi)) % 1.0) - 1.0
+        wave_data = np.tanh((saw * 0.8 + np.sin(phase) * 0.25) * 1.8) * np.exp(-4.0 * time_axis)
+    elif mode == "shard":
+        shard = 2.0 * ((phase * 1.7 / (2.0 * math.pi)) % 1.0) - 1.0
+        wave_data = bitcrush(shard, bits=6, hold=3) * np.exp(-9.0 * time_axis)
     elif mode == "noise":
         rng = np.random.default_rng(start + length)
         wave_data = (rng.standard_normal(actual) * np.exp(-6.0 * time_axis) * 0.6) + np.sin(phase) * env * 0.18
