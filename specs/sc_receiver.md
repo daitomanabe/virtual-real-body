@@ -38,12 +38,12 @@ s.options.sampleRate = 44100;
 
 ## SynthDefs
 
-- `\vrb_body` 持続音。`SinOsc` 複数 + `BrownNoise` + `RLPF`
-- `\vrb_onset` モーション開始の打撃音
-- `\vrb_impact` 衝撃音
-- `\vrb_enter` 人物検出の上昇音
-- `\vrb_exit` 人物消失の下降音
-- `\vrb_flow_burst` フロー急増のノイズバースト
+- `\vrb_body` 持続音。sub layer + torso harmonic layer + formant layer + breath/shimmer noise を `cutoff` と `amp` に追従させる
+- `\vrb_onset` モーション開始の短い strike。filtered noise + pitched body
+- `\vrb_impact` 衝撃音。low thump + crack + short ring
+- `\vrb_enter` 人物検出の上昇音。rising saw family + shimmer
+- `\vrb_exit` 人物消失の下降音。falling pulse/body + dusty tail
+- `\vrb_flow_burst` フロー急増のノイズバースト。band-pass noise cloud + resonant particles
 - `\vrb_reverb` `FreeVerb2` を使う
 - `\vrb_delay` `CombC` ベースのディレイ
 
@@ -54,6 +54,7 @@ s.options.sampleRate = 44100;
 - `EnvGen` には `doneAction: 2` を付ける
 - 出力は `Pan2.ar(...)` か `sig ! 2` でステレオ化する
 - クリップ対策として最終出力は `.tanh` を通す
+- `person_enter` / `person_exit` は `pan` を受け取った場合に空間位置へ反映する
 
 ## Named Pair Parsing
 
