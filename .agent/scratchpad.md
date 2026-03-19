@@ -168,3 +168,18 @@
 
 ## Next Hat Focus
 - Swift Builder can now rely on the Python-side topic names, payload keys, and OSC address map being present in code.
+
+## Iteration #7 — Ralph Coordination
+
+### Recovery State
+- `task.resume` arrived because the previous loop did not publish an event even though Python Builder completed its implementation pass.
+- Runtime tasks show `swift:app-shell` already marked `in_progress`, while downstream shader/SC/integration/doc tasks remain blocked behind the missing Python completion handoff.
+- `swift/` exists as an untracked directory, so Ralph should not inspect or alter Swift implementation here; the correct recovery is to restore the missing workflow signal.
+
+### Verification
+- Re-ran the required Python import gate with `python3` from `python/` and confirmed the current package imports succeed.
+- An initial probe used the wrong optical-flow export names; the resulting ImportError was recorded in `.agent/errors.log` and stored as a fix memory, then retried with the actual public names from `python/analyzers/__init__.py`.
+
+### Delegation Decision
+- Re-emit `python.built` with a brief recovery payload so Swift Builder can continue from the Python-complete boundary.
+- Keep this iteration coordination-only; do not touch the untracked Swift worktree from Ralph.
