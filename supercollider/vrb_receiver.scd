@@ -4,26 +4,35 @@ s.options.numInputBusChannels = 0;
 s.options.sampleRate = 44100;
 s.waitForBoot {
 	"virtual-real-body: server booted".postln;
-	NetAddr.langPort.postln;
+	("listening on langPort=" ++ NetAddr.langPort).postln;
 };
 s.boot;
 )
 
 (
-// Section 2: synths, buses, persistent nodes, and OSC receivers.
-var makeNamedValueParser;
+// Section 2: SynthDef definitions, node setup, and OSC receivers.
+var makeNamedValueParser, firstValue;
 
 makeNamedValueParser = { |msg|
-	var args, dictionary, i, key, value;
+	var args, dictionary, i, key, symbolKey, value;
 	args = msg[1..].asArray;
 	dictionary = IdentityDictionary.new;
 	i = 0;
 	while { i < args.size } {
 		key = args[i];
 		value = if((i + 1) < args.size) { args[i + 1] } { nil };
-		if(key.isKindOf(Symbol) and: { value.notNil }) {
-			dictionary.put(key, value);
-			i = i + 2;
+		if(value.notNil) {
+			symbolKey = if(key.isKindOf(Symbol)) {
+				key
+			} {
+				if(key.isKindOf(String)) { key.asSymbol } { nil }
+			};
+			if(symbolKey.notNil) {
+				dictionary.put(symbolKey, value);
+				i = i + 2;
+			} {
+				i = i + 1;
+			};
 		} {
 			i = i + 1;
 		};
@@ -31,8 +40,12 @@ makeNamedValueParser = { |msg|
 	dictionary;
 };
 
+firstValue = { |msg, fallback=0.0|
+	if(msg.size > 1) { msg[1].asFloat } { fallback };
+};
+
 s.waitForBoot {
-	var makeTrigger;
+	var makeTrigger, setBodyState, updateDetected;
 
 	SynthDef(\vrb_body, { |out=0, gate=1, freq=220, amp=0.0, cutoff=1200, pan=0|
 		var env, sig, body, noise;
@@ -65,7 +78,7 @@ s.waitForBoot {
 		var env, pitch, click, body, sig;
 		env = EnvGen.ar(Env.perc(0.001, 0.35, 1.0, -6), gate: gate, doneAction: 2);
 		pitch = XLine.kr(freq * 2.8, freq.max(40), 0.16);
-		click = WhiteNoise.ar(0.3) * EnvGen.ar(Env.perc(0.0005, 0.03, 1.0, -8), doneAction: 0);
+		click = WhiteNoise.ar(0.3) * EnvGen.ar(Env.perc(0.0005, 0.03, 1.0, -8));
 		body = SinOsc.ar(pitch, 0, 0.75);
 		sig = Pan2.ar((body + click) * env * amp.clip(0, 1), pan.clip(-1, 1));
 		Out.ar(out, sig.tanh);
@@ -100,14 +113,6 @@ s.waitForBoot {
 		Out.ar(out, sig.tanh);
 	}).add;
 
-	SynthDef(\vrb_reverb, { |out=0, gate=1, inbus=0, mix=0.18, room=0.55, damp=0.45|
-		var env, input, wetL, wetR;
-		env = EnvGen.kr(Env.asr(0.01, 1.0, 0.2), gate: gate, doneAction: 2);
-		input = In.ar(inbus, 2);
-		# wetL, wetR = FreeVerb2.ar(input[0], input[1], mix.clip(0, 1), room.clip(0, 1), damp.clip(0, 1));
-		ReplaceOut.ar(out, ([wetL, wetR] * env).tanh);
-	}).add;
-
 	SynthDef(\vrb_delay, { |out=0, gate=1, inbus=0, delaytime=0.2, feedback=0.25|
 		var env, input, delayed;
 		env = EnvGen.kr(Env.asr(0.01, 1.0, 0.2), gate: gate, doneAction: 2);
@@ -116,10 +121,18 @@ s.waitForBoot {
 		ReplaceOut.ar(out, (delayed * env).tanh);
 	}).add;
 
+	SynthDef(\vrb_reverb, { |out=0, gate=1, inbus=0, mix=0.18, room=0.55, damp=0.45|
+		var env, input, wetL, wetR;
+		env = EnvGen.kr(Env.asr(0.01, 1.0, 0.2), gate: gate, doneAction: 2);
+		input = In.ar(inbus, 2);
+		# wetL, wetR = FreeVerb2.ar(input[0], input[1], mix.clip(0, 1), room.clip(0, 1), damp.clip(0, 1));
+		ReplaceOut.ar(out, ([wetL, wetR] * env).tanh);
+	}).add;
+
 	s.sync;
 
 	~fxBus = Bus.audio(s, 2);
-	~delayBus = Bus.audio(s, 2);
+	~masterBus = Bus.audio(s, 2);
 	~bodyDetected = 0;
 	~bodyTargetAmp = 0.0;
 	~bodyParams = (
@@ -137,26 +150,36 @@ s.waitForBoot {
 		\pan, ~bodyParams[\pan]
 	]);
 
-	~delay = Synth.tail(s, \vrb_delay, [
+	~delay = Synth.new(\vrb_delay, [
 		\inbus, ~fxBus.index,
-		\out, ~delayBus.index,
+		\out, ~masterBus.index,
 		\delaytime, 0.2,
 		\feedback, 0.25
-	]);
+	], s, \addToTail);
 
-	~reverb = Synth.after(~delay, \vrb_reverb, [
-		\inbus, ~delayBus.index,
+	~reverb = Synth.new(\vrb_reverb, [
+		\inbus, ~masterBus.index,
 		\out, 0,
 		\mix, 0.18,
 		\room, 0.55
-	]);
+	], s, \addToTail);
 
-	~updateBodyAmp = {
+	setBodyState = {
 		var nextAmp;
 		nextAmp = if(~bodyDetected > 0) { ~bodyTargetAmp } { 0.0 };
 		if(~body.notNil) {
-			~body.set(\amp, nextAmp.clip(0, 1));
+			~body.set(
+				\freq, ~bodyParams[\freq],
+				\amp, nextAmp.clip(0, 1),
+				\cutoff, ~bodyParams[\cutoff],
+				\pan, ~bodyParams[\pan]
+			);
 		};
+	};
+
+	updateDetected = { |value|
+		~bodyDetected = value.asInteger.clip(0, 1);
+		setBodyState.();
 	};
 
 	makeTrigger = { |name, defaults|
@@ -171,11 +194,11 @@ s.waitForBoot {
 			if(pan.isNil) { pan = defaults[\pan] };
 			Synth(name, [
 				\out, ~fxBus.index,
-				\amp, amp,
-				\freq, freq,
-				\pan, pan
+				\amp, amp.asFloat,
+				\freq, freq.asFloat,
+				\pan, pan.asFloat
 			]);
-		}
+		};
 	};
 
 	OSCdef(\body, { |msg|
@@ -185,44 +208,33 @@ s.waitForBoot {
 		amp = values.at(\amp);
 		cutoff = values.at(\cutoff);
 		pan = values.at(\pan);
-		if(freq.notNil) { ~bodyParams[\freq] = freq };
-		if(amp.notNil) { ~bodyTargetAmp = amp.clip(0, 1) };
-		if(cutoff.notNil) { ~bodyParams[\cutoff] = cutoff.clip(80, 8000) };
-		if(pan.notNil) { ~bodyParams[\pan] = pan.clip(-1, 1) };
-		~body.set(
-			\freq, ~bodyParams[\freq],
-			\cutoff, ~bodyParams[\cutoff],
-			\pan, ~bodyParams[\pan]
-		);
-		~updateBodyAmp.();
+		if(freq.notNil) { ~bodyParams[\freq] = freq.asFloat };
+		if(amp.notNil) { ~bodyTargetAmp = amp.asFloat.clip(0, 1) };
+		if(cutoff.notNil) { ~bodyParams[\cutoff] = cutoff.asFloat.clip(80, 8000) };
+		if(pan.notNil) { ~bodyParams[\pan] = pan.asFloat.clip(-1, 1) };
+		setBodyState.();
 	}, '/synth/body', recvPort: NetAddr.langPort);
 
 	OSCdef(\reverbMix, { |msg|
-		var value;
-		value = msg[1].asFloat;
-		~reverb.set(\mix, value.clip(0, 1));
+		~reverb.set(\mix, firstValue.(msg, 0.18).clip(0, 1));
 	}, '/fx/reverb/mix', recvPort: NetAddr.langPort);
 
 	OSCdef(\reverbRoom, { |msg|
-		var value;
-		value = msg[1].asFloat;
-		~reverb.set(\room, value.clip(0, 1));
+		~reverb.set(\room, firstValue.(msg, 0.55).clip(0, 1));
 	}, '/fx/reverb/room', recvPort: NetAddr.langPort);
 
 	OSCdef(\delayTime, { |msg|
-		var value;
-		value = msg[1].asFloat;
-		~delay.set(\delaytime, value.clip(0.01, 0.95));
+		~delay.set(\delaytime, firstValue.(msg, 0.2).clip(0.01, 0.95));
 	}, '/fx/delay/time', recvPort: NetAddr.langPort);
 
 	OSCdef(\delayFeedback, { |msg|
-		var value;
-		value = msg[1].asFloat;
-		~delay.set(\feedback, value.clip(0.01, 0.99));
+		~delay.set(\feedback, firstValue.(msg, 0.25).clip(0.01, 0.99));
 	}, '/fx/delay/feedback', recvPort: NetAddr.langPort);
 
 	OSCdef(\motionOnset, makeTrigger.(\vrb_onset, (amp: 0.4, freq: 440, pan: 0.0)), '/trigger/motion_onset', recvPort: NetAddr.langPort);
 	OSCdef(\impact, makeTrigger.(\vrb_impact, (amp: 0.5, freq: 180, pan: 0.0)), '/trigger/impact', recvPort: NetAddr.langPort);
+	OSCdef(\flowBurst, makeTrigger.(\vrb_flow_burst, (amp: 0.4, freq: 900, pan: 0.0)), '/trigger/flow_burst', recvPort: NetAddr.langPort);
+
 	OSCdef(\personEnter, { |msg|
 		var values, amp, freq;
 		values = makeNamedValueParser.(msg);
@@ -230,10 +242,9 @@ s.waitForBoot {
 		freq = values.at(\freq);
 		if(amp.isNil) { amp = 0.45 };
 		if(freq.isNil) { freq = 320 };
-		Synth(\vrb_enter, [\out, ~fxBus.index, \amp, amp, \freq, freq, \pan, 0]);
-		~bodyDetected = 1;
-		~bodyTargetAmp = amp.clip(0, 1);
-		~updateBodyAmp.();
+		Synth(\vrb_enter, [\out, ~fxBus.index, \amp, amp.asFloat, \freq, freq.asFloat, \pan, 0.0]);
+		~bodyTargetAmp = amp.asFloat.clip(0, 1);
+		updateDetected.(1);
 	}, '/trigger/person_enter', recvPort: NetAddr.langPort);
 
 	OSCdef(\personExit, { |msg|
@@ -243,22 +254,15 @@ s.waitForBoot {
 		freq = values.at(\freq);
 		if(amp.isNil) { amp = 0.35 };
 		if(freq.isNil) { freq = 180 };
-		Synth(\vrb_exit, [\out, ~fxBus.index, \amp, amp, \freq, freq, \pan, 0]);
-		~bodyDetected = 0;
-		~updateBodyAmp.();
+		Synth(\vrb_exit, [\out, ~fxBus.index, \amp, amp.asFloat, \freq, freq.asFloat, \pan, 0.0]);
+		updateDetected.(0);
 	}, '/trigger/person_exit', recvPort: NetAddr.langPort);
 
-	OSCdef(\flowBurst, makeTrigger.(\vrb_flow_burst, (amp: 0.4, freq: 900, pan: 0.0)), '/trigger/flow_burst', recvPort: NetAddr.langPort);
-
 	OSCdef(\detected, { |msg|
-		var detected;
-		detected = msg[1].asInteger;
-		~bodyDetected = detected;
-		~updateBodyAmp.();
+		updateDetected.(firstValue.(msg, 0).asInteger);
 	}, '/vrb/meta/detected', recvPort: NetAddr.langPort);
 
 	"virtual-real-body: OSCdefs registered".postln;
-	("listening on langPort=" ++ NetAddr.langPort).postln;
 };
 )
 
@@ -276,9 +280,9 @@ OSCdef(\personExit).free;
 OSCdef(\flowBurst).free;
 OSCdef(\detected).free;
 
-	if(~body.notNil) { ~body.set(\gate, 0) };
-	if(~reverb.notNil) { ~reverb.set(\gate, 0) };
-	if(~delay.notNil) { ~delay.set(\gate, 0) };
-	if(~delayBus.notNil) { ~delayBus.free };
-	if(~fxBus.notNil) { ~fxBus.free };
+if(~body.notNil) { ~body.set(\gate, 0) };
+if(~reverb.notNil) { ~reverb.set(\gate, 0) };
+if(~delay.notNil) { ~delay.set(\gate, 0) };
+if(~masterBus.notNil) { ~masterBus.free };
+if(~fxBus.notNil) { ~fxBus.free };
 )

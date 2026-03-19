@@ -316,3 +316,14 @@
 ### Next Hat Focus
 - SC Builder は既に完了済みなので、この handoff は Integrator が Python/Swift/SC の最新状態で再度統合確認する前提。
 - Metal CLI (`xcrun metal`) は未導入のため、オフライン shader compile は引き続き未検証。
+
+## Iteration #16 — SC Builder
+
+### Phase 3 Refresh
+- Updated `supercollider/vrb_receiver.scd` to accept Python OSC named pairs whether keys arrive as `String` or `Symbol`, which addresses the integrator mismatch noted after the first SC pass.
+- Consolidated sustained-body state updates so `/synth/body`, `/trigger/person_enter`, `/trigger/person_exit`, and `/vrb/meta/detected` all drive the same amp/detection gate behavior.
+- Kept the three-section layout intact and clarified the FX chain as `~fxBus -> ~masterBus -> reverb -> out 0`.
+
+### Verification
+- Re-ran the required Python import gate with the actual analyzer exports from `python/analyzers/__init__.py` and confirmed it passes.
+- `sclang` is still unavailable in this environment, so syntax/runtime verification of `supercollider/vrb_receiver.scd` remains blocked on a local SuperCollider install.
