@@ -1,19 +1,27 @@
 # Scratchpad — virtual-real-body
 
 ## Current State
-- Iteration #1 active under Git Setup hat.
+- Git repository is initialized on `main` and connected to `origin`.
 - GitHub auth is valid for account `daitomanabe`.
-- Repository is not initialized yet; `git` inspection failed because `.git/` is absent.
+- GitHub repository `https://github.com/daitomanabe/virtual-real-body` is public.
+- `Satin` and `lygia` submodules are checked out under `external/Satin` and `external/lygia`.
+- No Ralph loop is currently active; the last completed handoff was `plan.ready`.
 - Top-level `scratchpad.md` exists as prior planning context, but `.agent/scratchpad.md` is now the workflow source of truth.
 
+## Infrastructure Update
+- GitHub repository `https://github.com/daitomanabe/virtual-real-body` is public.
+- `Satin` and `lygia` are managed as git submodules under `external/Satin` and `external/lygia`.
+- Future Swift work should treat those submodule paths as the only supported dependency roots.
+- Every Ralph iteration must push `origin/main` before emitting its done event.
+
 ## Objective Focus
-- Complete only Phase 0 Git setup in this iteration.
-- Initialize git, confirm `.gitignore`, create the initial commit, create or attach the GitHub remote, and emit `git.ready`.
+- Keep the dependency strategy aligned with the new submodule/public requirements.
+- Resume Ralph from `python_builder` after the infra/config update commit is pushed.
 
 ## Next Actions
-- Run `git init`.
-- Inspect `.gitignore` against the required bootstrap entries.
-- Commit current project files and push `main` to GitHub.
+- Commit the submodule and config updates.
+- Push `origin/main`.
+- Resume Ralph with `--continue` so `python_builder` continues under the new dependency assumptions.
 
 ## Outcome
 - Git repository initialized on branch `main`.
@@ -55,7 +63,7 @@
 - [ ] `python/requirements.txt`
 
 ## Phase 2: Swift Renderer（Satin + LYGIA）
-- [ ] `swift/Package.swift` — Satin local path dependency
+- [ ] `swift/Package.swift` — Satin submodule dependency
 - [ ] `swift/Sources/VirtualRealBody/App/main.swift` + `AppDelegate.swift` — NSApp / fullscreen MTKView
 - [ ] `swift/Sources/VirtualRealBody/Data/PoseData.swift` — バイナリプロトコル + GPU uniform structs
 - [ ] `swift/Sources/VirtualRealBody/Input/PoseReceiver.swift` — ZMQ SUB（SwiftZMQ preferred, fallback if needed）

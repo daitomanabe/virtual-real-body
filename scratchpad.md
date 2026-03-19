@@ -12,8 +12,8 @@ Ralph 実行時の正本は `.agent/scratchpad.md`。
 - SuperCollider 受信・合成エンジン
 
 ## Critical Paths
-- Satin: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Satin
-- Lygia: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia
+- Satin submodule: external/Satin
+- Lygia submodule: external/lygia
 
 ## Phase 状態
 - [ ] Phase 0: Git Setup

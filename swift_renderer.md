@@ -3,8 +3,8 @@
 ## Paths (CRITICAL)
 
 ```
-Satin: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Satin
-Lygia: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia
+Satin submodule: external/Satin
+Lygia submodule: external/lygia
 ```
 
 ## Package.swift
@@ -17,7 +17,7 @@ let package = Package(
     name: "VirtualRealBody",
     platforms: [.macOS(.v14)],
     dependencies: [
-        .package(path: "/Users/daitomacm5/development/lab/source/github-public-only/fabric/Satin"),
+        .package(path: "../external/Satin"),
     ],
     targets: [
         .executableTarget(
@@ -79,9 +79,9 @@ SwiftZMQ: https://github.com/azawawi/SwiftZMQ
 
 ```swift
 // Lygia root は定数で持つ
-static let LYGIA_ROOT = URL(fileURLWithPath:
-    "/Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia"
-)
+static let LYGIA_ROOT = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    .appendingPathComponent("../external/lygia")
+    .standardizedFileURL
 
 // #include "lygia/sdf/circleSDF.msl" → .msl ファイルをインライン展開
 // makeLibrary(source:) に渡す前に resolve() を呼ぶ

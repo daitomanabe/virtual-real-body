@@ -1,0 +1,6 @@
+[submodule "external/Satin"]
+	path = external/Satin
+	url = https://github.com/Fabric-Project/Satin
+[submodule "external/lygia"]
+	path = external/lygia
+	url = https://github.com/patriciogonzalezvivo/lygia

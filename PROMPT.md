@@ -71,18 +71,20 @@ Camera
 ## ⚠️ Critical Paths
 
 ```
-Satin: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Satin
-Lygia: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia
+Satin submodule: external/Satin
+Lygia submodule: external/lygia
 ```
 
 Package.swift の依存:
 ```swift
-.package(path: "/Users/daitomacm5/development/lab/source/github-public-only/fabric/Satin")
+.package(path: "../external/Satin")
 ```
 
 LygiaResolver の lygiaRoot:
 ```swift
-URL(fileURLWithPath: "/Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia")
+URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+  .appendingPathComponent("../external/lygia")
+  .standardizedFileURL
 ```
 
 ---
@@ -197,11 +199,15 @@ virtual-real-body/
   README.md               (final_reviewerが生成)
   COMPLETION_REPORT.md    (final_reviewerが生成)
   .gitignore
+  .gitmodules
   .agent/
     scratchpad.md
     iteration.log
     errors.log
     memories.md
+  external/
+    Satin/               (git submodule)
+    lygia/               (git submodule)
   specs/
     architecture.md
     python_engine.md
@@ -269,10 +275,11 @@ virtual-real-body/
 
 ## Success Criteria
 
-- [ ] `python main.py` が起動しカメラから解析を開始できる
+- [ ] `python3 main.py` が起動しカメラから解析を開始できる
 - [ ] ZMQ メッセージが `tcp://localhost:5555` で受信できる
 - [ ] OSC メッセージが port 9000 + 57120 に送信される
 - [ ] `swift build` が成功する
+- [ ] `Satin` / `lygia` submodule が clone 済みで参照できる
 - [ ] Satin の MetalViewRenderer が 60fps で動作する
 - [ ] VirtualBody.metal が LYGIA の SDF 関数を使って描画する
 - [ ] SC で vrb_receiver.scd が実行でき、OSCdef が登録される

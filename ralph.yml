@@ -16,12 +16,13 @@ core:
   specs_dir: "./specs/"
   guardrails:
     - "Fresh context each iteration — .agent/scratchpad.md を必ず読んでから作業開始"
-    - "Satin path: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Satin"
-    - "Lygia path: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia"
+    - "Satin submodule path: external/Satin"
+    - "Lygia submodule path: external/lygia"
     - "ZMQ port 5555 (binary/MessagePack), OSC port 9000 (Swift/TD) + 57120 (SuperCollider)"
     - "全iteration開始時に受け取ったイベント名を .agent/iteration.log に記録"
     - "エラーが起きたら .agent/errors.log にエラー内容を記録"
-    - "backpressure: python -c 'import xxx' でimportが通ることを確認してからdone発行"
+    - "Every iteration must git push origin main before emitting a done event"
+    - "backpressure: python3 -c 'import xxx' でimportが通ることを確認してからdone発行"
 
 memories:
   enabled: true
@@ -64,7 +65,7 @@ hats:
          .agent/memories.md
          ```
       4. git add -A && git commit -m "[Ralph] Initial: virtual-real-body project"
-      5. gh repo create virtual-real-body --private --source=. --remote=origin --push
+      5. gh repo create virtual-real-body --public --source=. --remote=origin --push
          （既存なら: git remote get-url origin で確認後 git push -u origin main）
 
       作業完了後:
@@ -114,7 +115,7 @@ hats:
          - [ ] requirements.txt
 
          ## Phase 2: Swift Renderer（Satin + LYGIA）
-         - [ ] Package.swift — Satin local path dependency
+         - [ ] Package.swift — Satin submodule dependency
          - [ ] App/main.swift + AppDelegate.swift — NSApp / fullscreen MTKView
          - [ ] Data/PoseData.swift — バイナリプロトコル + GPU uniform structs
          - [ ] Input/PoseReceiver.swift — ZMQ SUB（SwiftZMQ or Network.framework）
@@ -198,7 +199,7 @@ hats:
         meta.fps
 
       品質チェック（完了条件）:
-      1. cd python && python -c "
+      1. cd python && python3 -c "
            import config, core.analyzer_base, core.engine
            import analyzers.yolo_analyzer
            import analyzers.optical_flow_analyzer
@@ -240,17 +241,17 @@ hats:
       3. swift/ ディレクトリの現状確認
 
       CRITICAL — パス設定:
-        Satin local path: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Satin
-        Lygia local path: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia
+        Satin submodule path: external/Satin
+        Lygia submodule path: external/lygia
 
-      Package.swift はローカルパス依存として記述:
+      Package.swift は submodule へのローカル依存として記述:
         ```swift
-        .package(path: "/Users/daitomacm5/development/lab/source/github-public-only/fabric/Satin")
+        .package(path: "../external/Satin")
         ```
 
       実装ファイル（specs/swift_renderer.md 参照）:
       1. swift/Package.swift
-         - Satin をローカルパスで参照
+         - Satin submodule を参照
          - ターゲット: VirtualRealBody (macOS 14.0+)
          - Shaders/ を .process("Shaders") でリソースバンドル
 
@@ -283,7 +284,7 @@ hats:
          - Metal texture cache
 
       7. swift/Sources/VirtualRealBody/Rendering/LygiaResolver.swift
-         - Lygia ディレクトリ: /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia
+         - Lygia ディレクトリ: external/lygia
          - #include "lygia/..." を .msl ファイルから再帰的にインライン展開
          - MTLDevice.makeLibrary(source:) に渡す前に呼ぶ
 
@@ -323,12 +324,12 @@ hats:
       1. .agent/scratchpad.md を読む
       2. .agent/iteration.log を読む
       3. Lygia の利用可能な .msl ファイルを確認:
-         ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/sdf/
-         ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/draw/
-         ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/generative/
-         ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/math/
-         ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/color/
-         ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/space/
+         ls external/lygia/sdf/
+         ls external/lygia/draw/
+         ls external/lygia/generative/
+         ls external/lygia/math/
+         ls external/lygia/color/
+         ls external/lygia/space/
 
       実際に存在するファイル名を確認してから #include パスを書くこと。
 
@@ -372,7 +373,7 @@ hats:
 
       シェーダー構文チェック（xcrun metal でオフラインチェック）:
         xcrun -sdk macosx metal -c swift/Sources/VirtualRealBody/Shaders/VirtualBody.metal \
-          -I /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia \
+          -I external/lygia \
           -o /dev/null 2>&1 | head -30
         ⚠️ LygiaResolver は実行時展開なのでコンパイルエラーは無視してよい
            ただし Metal 構文エラー（セミコロン抜け、型ミス等）は修正すること
@@ -491,7 +492,7 @@ hats:
          Python EventAnalyzer の OSCアドレスと SC vrb_receiver.scd の OSCdef アドレスが一致しているか
 
       B) Python imports チェック:
-         cd python && python -c "
+         cd python && python3 -c "
            from config import *
            from core.analyzer_base import Analyzer, AnalysisResult
            from core.engine import AnalysisEngine
@@ -516,11 +517,11 @@ hats:
 
       E) LYGIA #include パス:
          各shaderの #include "lygia/XXX.msl" が
-         /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/XXX.msl
+         external/lygia/XXX.msl
          として実在するかチェック:
-           ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/sdf/circleSDF.msl
-           ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/sdf/segmentSDF.msl
-           ls /Users/daitomacm5/development/lab/source/github-public-only/fabric/Lygia/draw/stroke.msl
+           ls external/lygia/sdf/circleSDF.msl
+           ls external/lygia/sdf/segmentSDF.msl
+           ls external/lygia/draw/stroke.msl
          存在しない場合は実在するファイル名に修正指示を出す
 
       問題があるコンポーネントに対して review.XXX イベントを発行。
