@@ -41,6 +41,16 @@ Frame N:
     Pass 3: Compositor.metal   (outputW×panelH) → screen drawable
 ```
 
+## Analysis Inputs
+
+- `mp.pose` / `yolo.pose` for landmarks, velocity, CoM
+- `yolo.seg` for silhouette polygon points
+- `flow.dense` for motion energy, direction, quadrant weights
+- `depth.map` for CoM depth and mean depth
+- `particle.state` for spawn points around the body
+
+`PoseReceiver` merges those topics into one render frame before GPU upload.
+
 ## GPU Buffer Layout
 
 ### JointUniform (32 bytes, shared)
@@ -56,7 +66,7 @@ struct JointUniform {
 // 8 + 4 + 4 + 4 + 12 = 32 bytes
 ```
 
-### VirtualBodyUniform (24 bytes)
+### VirtualBodyUniform
 
 ```swift
 struct VirtualBodyUniform {
@@ -64,9 +74,19 @@ struct VirtualBodyUniform {
     var resolution:  SIMD2<Float>
     var jointCount:  UInt32
     var boneCount:   UInt32
-    var _pad:        SIMD2<Float>
+    var segmentCount: UInt32
+    var particleCount: UInt32
+    var renderMode:  UInt32
+    var detected:    UInt32
+    var com:         SIMD2<Float>
+    var flowVector:  SIMD2<Float>
+    var quadrants:   SIMD4<Float>
+    var analysis:    SIMD4<Float>
+    var styleMix:    SIMD4<Float>
 }
 ```
+
+`styleMix` は `membrane / ribbons / swarm / prism` の重みで、`lattice` は残差として扱う。
 
 ## ZMQ Reception
 
@@ -99,3 +119,12 @@ static let LYGIA_ROOT = URL(fileURLWithPath: FileManager.default.currentDirector
 └────────────────────┴────────────────────┘
  ←─────────── 2560 × 720 ───────────────→
 ```
+
+## Runtime Controls
+
+- `0`: auto blend
+- `1`: lattice
+- `2`: membrane
+- `3`: ribbons
+- `4`: swarm
+- `5`: prism

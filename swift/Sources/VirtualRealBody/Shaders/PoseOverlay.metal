@@ -1,10 +1,10 @@
 #include <metal_stdlib>
+using namespace metal;
+
 #include "lygia/sdf/circleSDF.msl"
 #include "lygia/sdf/lineSDF.msl"
 #include "lygia/draw/stroke.msl"
 #include "lygia/math/map.msl"
-
-using namespace metal;
 
 #ifndef VRB_SHARED_TYPES
 #define VRB_SHARED_TYPES
@@ -31,7 +31,15 @@ struct VirtualBodyUniform {
     float2 resolution;
     uint jointCount;
     uint boneCount;
-    float2 pad;
+    uint segmentCount;
+    uint particleCount;
+    uint renderMode;
+    uint detected;
+    float2 com;
+    float2 flowVector;
+    float4 quadrants;
+    float4 analysis;
+    float4 styleMix;
 };
 
 struct OverlayUniform {
@@ -42,6 +50,8 @@ struct OverlayUniform {
 #endif
 
 constant uint kOverlayJointCount = 33;
+constant uint kOverlaySegmentPointCount = 8;
+constant uint kOverlayParticlePointCount = 8;
 
 float2 vrbOverlayAspect(float2 uv, float2 resolution) {
     float2 centered = uv * 2.0 - 1.0;
@@ -62,7 +72,10 @@ fragment float4 poseOverlayFragment(
     texture2d<float> cameraTexture [[texture(0)]],
     constant JointUniform *joints [[buffer(0)]],
     constant BoneUniform *bones [[buffer(1)]],
-    constant OverlayUniform &uniforms [[buffer(2)]]
+    constant float2 *segmentPoints [[buffer(2)]],
+    constant float2 *particlePoints [[buffer(3)]],
+    constant VirtualBodyUniform &bodyUniforms [[buffer(4)]],
+    constant OverlayUniform &uniforms [[buffer(5)]]
 ) {
     constexpr sampler texSampler(address::clamp_to_edge, filter::linear);
 
@@ -77,6 +90,35 @@ fragment float4 poseOverlayFragment(
 
     float2 aspectUV = vrbOverlayAspect(in.uv, uniforms.resolution);
     float3 overlayColor = base.rgb;
+    float2 com = vrbOverlayAspect(bodyUniforms.com, uniforms.resolution);
+
+    uint segmentCount = min(bodyUniforms.segmentCount, kOverlaySegmentPointCount);
+    if (segmentCount > 1u) {
+        for (uint i = 0; i < segmentCount; ++i) {
+            uint next = (i + 1u) % segmentCount;
+            float2 start = vrbOverlayAspect(segmentPoints[i], uniforms.resolution);
+            float2 end = vrbOverlayAspect(segmentPoints[next], uniforms.resolution);
+            float hull = stroke(lineSDF(aspectUV, start, end), 0.0, 0.006 + bodyUniforms.analysis.x * 0.01);
+            overlayColor = mix(overlayColor, float3(0.84, 0.32, 0.92), saturate(hull * 0.62));
+        }
+    }
+
+    if (bodyUniforms.particleCount > 0u) {
+        for (uint i = 0; i < min(bodyUniforms.particleCount, kOverlayParticlePointCount); ++i) {
+            float2 point = vrbOverlayAspect(particlePoints[i], uniforms.resolution);
+            float dist = distance(aspectUV, point);
+            float orb = 1.0 - smoothstep(0.008, 0.024 + bodyUniforms.analysis.w * 0.03, dist);
+            float tether = stroke(lineSDF(aspectUV, com, point), 0.0, 0.0025);
+            overlayColor = mix(overlayColor, float3(0.45, 1.0, 0.82), saturate((orb * 0.7) + (tether * 0.22)));
+        }
+    }
+
+    float2 flowEnd = com + float2(
+        bodyUniforms.flowVector.x * (uniforms.resolution.x / max(uniforms.resolution.y, 1.0)),
+        bodyUniforms.flowVector.y
+    ) * 1.2;
+    float flowBeam = stroke(lineSDF(aspectUV, com, flowEnd), 0.0, 0.01 + bodyUniforms.analysis.w * 0.02);
+    overlayColor = mix(overlayColor, float3(1.0, 0.42, 0.28), saturate(flowBeam * 0.45));
 
     for (uint i = 0; i < 14u; ++i) {
         BoneUniform bone = bones[i];

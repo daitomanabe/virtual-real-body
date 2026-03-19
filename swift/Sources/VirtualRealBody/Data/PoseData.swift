@@ -2,6 +2,8 @@ import Foundation
 import simd
 
 let JOINT_COUNT = 33
+let MAX_SEGMENT_POINTS = 8
+let MAX_PARTICLE_POINTS = 8
 let ZMQ_HOST = "127.0.0.1"
 let ZMQ_PORT: UInt16 = 5555
 
@@ -14,6 +16,15 @@ struct PoseFrame: Sendable {
     var velocities: [SIMD2<Float>]
     var speeds: [Float]
     var com: SIMD3<Float>
+    var segmentCount: Int
+    var segmentPoints: [SIMD2<Float>]
+    var particleCount: Int
+    var particlePoints: [SIMD2<Float>]
+    var flowVector: SIMD2<Float>
+    var quadrants: SIMD4<Float>
+    var flowEnergy: Float
+    var depth: Float
+    var depthMean: Float
 
     static let empty = PoseFrame(
         source: "none",
@@ -23,7 +34,16 @@ struct PoseFrame: Sendable {
         landmarks: Array(repeating: SIMD4<Float>(0, 0, 0, 0), count: JOINT_COUNT),
         velocities: Array(repeating: SIMD2<Float>(0, 0), count: JOINT_COUNT),
         speeds: Array(repeating: 0, count: JOINT_COUNT),
-        com: SIMD3<Float>(0.5, 0.5, 0)
+        com: SIMD3<Float>(0.5, 0.5, 0),
+        segmentCount: 0,
+        segmentPoints: Array(repeating: SIMD2<Float>(0.5, 0.5), count: MAX_SEGMENT_POINTS),
+        particleCount: 0,
+        particlePoints: Array(repeating: SIMD2<Float>(0.5, 0.5), count: MAX_PARTICLE_POINTS),
+        flowVector: SIMD2<Float>(0, 0),
+        quadrants: SIMD4<Float>(0, 0, 0, 0),
+        flowEnergy: 0,
+        depth: 0.5,
+        depthMean: 0.5
     )
 }
 
@@ -45,7 +65,15 @@ struct VirtualBodyUniform {
     var resolution: SIMD2<Float>
     var jointCount: UInt32
     var boneCount: UInt32
-    var pad: SIMD2<Float> = .zero
+    var segmentCount: UInt32
+    var particleCount: UInt32
+    var renderMode: UInt32
+    var detected: UInt32
+    var com: SIMD2<Float>
+    var flowVector: SIMD2<Float>
+    var quadrants: SIMD4<Float>
+    var analysis: SIMD4<Float>
+    var styleMix: SIMD4<Float>
 }
 
 struct OverlayUniform {

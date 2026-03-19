@@ -42,6 +42,7 @@ The repository is public at `https://github.com/daitomanabe/virtual-real-body` a
 - Receiver: `swift/Sources/VirtualRealBody/Input/PoseReceiver.swift`
 - Renderer: `swift/Sources/VirtualRealBody/Rendering/MainRenderer.swift`
 - Shader include resolver: `swift/Sources/VirtualRealBody/Rendering/LygiaResolver.swift`
+- Pose receiver now merges `mp.pose`, `yolo.pose`, `yolo.seg`, `flow.dense`, `depth.map`, and `particle.state`
 
 The renderer creates two offscreen passes:
 
@@ -49,6 +50,16 @@ The renderer creates two offscreen passes:
 - `PoseOverlay.metal` for camera and pose overlay
 
 Those passes are combined in `Compositor.metal` into the final side-by-side output.
+
+The virtual body now has five visual behavior families driven by analysis input:
+
+- `lattice` skeleton and joint energy
+- `membrane` segmentation / depth shell
+- `ribbons` flow-driven motion streaks
+- `swarm` particle emitter body
+- `prism` quadrant / depth shards
+
+Press `0` for auto mode, or `1` to `5` to lock one family while the renderer is running.
 
 ### SuperCollider receiver
 

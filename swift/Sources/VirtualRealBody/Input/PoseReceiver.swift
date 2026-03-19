@@ -20,7 +20,7 @@ final class PoseReceiver {
         do {
             let subscriber = try ZeroMQSubscriber(
                 endpoint: endpoint,
-                subscriptions: ["mp.pose", "yolo.pose"]
+                subscriptions: ["mp.pose", "yolo.pose", "yolo.seg", "flow.dense", "depth.map", "particle.state"]
             )
             self.subscriber = subscriber
             running = true
@@ -45,9 +45,11 @@ final class PoseReceiver {
     }
 
     func ingestMessage(topic: String, payload: Data) {
-        guard topic == "mp.pose" || topic == "yolo.pose" else { return }
-        guard let frame = decodePoseFrame(topic: topic, payload: payload) else { return }
+        guard ["mp.pose", "yolo.pose", "yolo.seg", "flow.dense", "depth.map", "particle.state"].contains(topic) else { return }
+        guard let root = decodeRootObject(payload) else { return }
         lock.lock()
+        var frame = latest
+        applyMessage(topic: topic, root: root, frame: &frame)
         latest = frame
         lock.unlock()
     }
@@ -62,49 +64,66 @@ final class PoseReceiver {
         }
     }
 
-    private func decodePoseFrame(topic: String, payload: Data) -> PoseFrame? {
-        guard let root = decodeRootObject(payload) else {
-            return nil
-        }
-
-        let frameID = UInt64((root["frame_id"] as? Int64) ?? 0)
-        let timestamp = root["timestamp"] as? Double ?? 0
-        let detected = root["detected"] as? Bool ?? false
+    private func applyMessage(topic: String, root: [String: Any], frame: inout PoseFrame) {
+        let frameID = UInt64((root["frame_id"] as? Int64) ?? Int64(frame.frameID))
+        let timestamp = root["timestamp"] as? Double ?? frame.timestamp
+        let detected = root["detected"] as? Bool ?? frame.detected
         let data = root["data"] as? [String: Any] ?? [:]
 
-        if topic == "mp.pose" {
-            let landmarks = Self.parseLandmarks(data["landmarks_norm"], jointCount: JOINT_COUNT, width: 4)
-            let velocities = Self.parseVectors2(data["velocity"], jointCount: JOINT_COUNT)
-            let speeds = Self.parseSpeeds(data["speed_norm"], fallbackVectors: velocities, jointCount: JOINT_COUNT)
-            let com = Self.parseVector3(data["com"]) ?? SIMD3<Float>(0.5, 0.5, 0)
-            return PoseFrame(
-                source: topic,
-                frameID: frameID,
-                timestamp: timestamp,
-                detected: detected,
-                landmarks: landmarks,
-                velocities: velocities,
-                speeds: speeds,
-                com: com
-            )
-        }
+        frame.frameID = max(frame.frameID, frameID)
+        frame.timestamp = max(frame.timestamp, timestamp)
+        frame.source = topic
 
-        let persons = data["persons"] as? [[String: Any]] ?? []
-        guard let person = persons.first else { return PoseFrame.empty }
-        let landmarks = Self.parseLandmarks(person["keypoints"], jointCount: JOINT_COUNT, width: 3)
-        let velocities = Self.parseVectors2(person["velocity"], jointCount: JOINT_COUNT)
-        let speeds = Self.parseSpeeds(person["speed"], fallbackVectors: velocities, jointCount: JOINT_COUNT)
-        let com = Self.parseVector3(person["com"]) ?? SIMD3<Float>(0.5, 0.5, 0)
-        return PoseFrame(
-            source: topic,
-            frameID: frameID,
-            timestamp: timestamp,
-            detected: detected,
-            landmarks: landmarks,
-            velocities: velocities,
-            speeds: speeds,
-            com: com
-        )
+        switch topic {
+        case "mp.pose":
+            frame.detected = detected
+            frame.landmarks = Self.parseLandmarks(data["landmarks_norm"], jointCount: JOINT_COUNT, width: 4)
+            frame.velocities = Self.parseVectors2(data["velocity"], jointCount: JOINT_COUNT)
+            frame.speeds = Self.parseSpeeds(data["speed_norm"], fallbackVectors: frame.velocities, jointCount: JOINT_COUNT)
+            frame.com = Self.parseVector3(data["com"]) ?? frame.com
+        case "yolo.pose":
+            let persons = data["persons"] as? [[String: Any]] ?? []
+            guard let person = persons.first else {
+                frame.detected = detected
+                frame.landmarks = Array(repeating: SIMD4<Float>(0, 0, 0, 0), count: JOINT_COUNT)
+                frame.velocities = Array(repeating: .zero, count: JOINT_COUNT)
+                frame.speeds = Array(repeating: 0, count: JOINT_COUNT)
+                return
+            }
+            frame.detected = detected
+            frame.landmarks = Self.parseLandmarks(person["keypoints"], jointCount: JOINT_COUNT, width: 3)
+            frame.velocities = Self.parseVectors2(person["velocity"], jointCount: JOINT_COUNT)
+            frame.speeds = Self.parseSpeeds(person["speed"], fallbackVectors: frame.velocities, jointCount: JOINT_COUNT)
+            frame.com = Self.parseVector3(person["com"]) ?? frame.com
+        case "yolo.seg":
+            let segments = data["segments"] as? [[String: Any]] ?? []
+            if let segment = segments.first {
+                let parsed = Self.parsePoints2(segment["polygon"], count: MAX_SEGMENT_POINTS, fallback: frame.segmentPoints)
+                frame.segmentCount = parsed.count
+                frame.segmentPoints = parsed.points
+            }
+        case "flow.dense":
+            let energy = Self.asFloat(data["energy"])
+            let direction = Self.asFloat(data["direction"])
+            let quadrants = data["quadrants"] as? [String: Any] ?? [:]
+            frame.flowEnergy = energy
+            frame.flowVector = SIMD2<Float>(cos(direction) * energy, sin(direction) * energy)
+            frame.quadrants = SIMD4<Float>(
+                Self.asFloat(quadrants["tl"]),
+                Self.asFloat(quadrants["tr"]),
+                Self.asFloat(quadrants["bl"]),
+                Self.asFloat(quadrants["br"])
+            )
+        case "depth.map":
+            frame.depth = Self.asFloat(data["com_depth"])
+            frame.depthMean = Self.asFloat(data["mean"])
+        case "particle.state":
+            let parsed = Self.parsePoints2(data["spawn_points"], count: MAX_PARTICLE_POINTS, fallback: frame.particlePoints)
+            frame.particleCount = parsed.count
+            frame.particlePoints = parsed.points
+        default:
+            break
+        }
     }
 
     private static func parseLandmarks(_ value: Any?, jointCount: Int, width: Int) -> [SIMD4<Float>] {
@@ -150,6 +169,18 @@ final class PoseReceiver {
     private static func parseVector3(_ value: Any?) -> SIMD3<Float>? {
         guard let row = value as? [Any] else { return nil }
         return SIMD3<Float>(asFloat(row[safe: 0]), asFloat(row[safe: 1]), asFloat(row[safe: 2]))
+    }
+
+    private static func parsePoints2(_ value: Any?, count: Int, fallback: [SIMD2<Float>]) -> (points: [SIMD2<Float>], count: Int) {
+        guard let rows = value as? [[Any]] else {
+            return (fallback, 0)
+        }
+        var result = Array(repeating: SIMD2<Float>(0.5, 0.5), count: count)
+        let parsedCount = min(rows.count, count)
+        for (index, row) in rows.prefix(count).enumerated() {
+            result[index] = SIMD2<Float>(asFloat(row[safe: 0]), asFloat(row[safe: 1]))
+        }
+        return (result, parsedCount)
     }
 
     private func decodeRootObject(_ payload: Data) -> [String: Any]? {

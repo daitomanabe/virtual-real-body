@@ -4,6 +4,38 @@ import MetalKit
 import Satin
 import simd
 
+private enum VirtualBodyRenderMode: UInt32 {
+    case auto = 0
+    case lattice = 1
+    case membrane = 2
+    case ribbons = 3
+    case swarm = 4
+    case prism = 5
+
+    var label: String {
+        switch self {
+        case .auto: "auto"
+        case .lattice: "lattice"
+        case .membrane: "membrane"
+        case .ribbons: "ribbons"
+        case .swarm: "swarm"
+        case .prism: "prism"
+        }
+    }
+
+    static func from(character: Character) -> VirtualBodyRenderMode? {
+        switch character {
+        case "0": .auto
+        case "1": .lattice
+        case "2": .membrane
+        case "3": .ribbons
+        case "4": .swarm
+        case "5": .prism
+        default: nil
+        }
+    }
+}
+
 final class MainRenderer: MetalViewRenderer {
     private let poseReceiver = PoseReceiver()
     private var cameraCapture: CameraCapture?
@@ -11,6 +43,8 @@ final class MainRenderer: MetalViewRenderer {
 
     private var jointBuffer: MTLBuffer?
     private var boneBuffer: MTLBuffer?
+    private var segmentBuffer: MTLBuffer?
+    private var particleBuffer: MTLBuffer?
     private var virtualUniformBuffer: MTLBuffer?
     private var overlayUniformBuffer: MTLBuffer?
 
@@ -23,6 +57,7 @@ final class MainRenderer: MetalViewRenderer {
 
     private var poseFrame = PoseFrame.empty
     private var viewportSize = SIMD2<Float>(2560, 720)
+    private var renderMode: VirtualBodyRenderMode = .auto
 
     override func setup() {
         poseReceiver.start()
@@ -52,15 +87,31 @@ final class MainRenderer: MetalViewRenderer {
                 visibility: landmark.w
             )
         }
+        let visibleJoints = jointUniforms.filter { $0.visibility > 0.01 }
+        let poseEnergy = visibleJoints.isEmpty
+            ? 0
+            : visibleJoints.reduce(Float.zero) { $0 + max($1.speed, $1.energy) } / Float(visibleJoints.count)
+        let styleMix = makeStyleMix(poseEnergy: poseEnergy)
 
         updateBuffer(jointBuffer, with: jointUniforms)
         updateBuffer(boneBuffer, with: BONES.map { BoneUniform(joints: $0) })
+        updateBuffer(segmentBuffer, with: poseFrame.segmentPoints)
+        updateBuffer(particleBuffer, with: poseFrame.particlePoints)
 
         var virtualUniform = VirtualBodyUniform(
             time: time,
             resolution: viewportSize / SIMD2<Float>(2, 1),
             jointCount: UInt32(JOINT_COUNT),
-            boneCount: UInt32(BONES.count)
+            boneCount: UInt32(BONES.count),
+            segmentCount: UInt32(poseFrame.segmentCount),
+            particleCount: UInt32(poseFrame.particleCount),
+            renderMode: renderMode.rawValue,
+            detected: poseFrame.detected ? 1 : 0,
+            com: SIMD2<Float>(poseFrame.com.x, poseFrame.com.y),
+            flowVector: poseFrame.flowVector,
+            quadrants: poseFrame.quadrants,
+            analysis: SIMD4<Float>(poseFrame.depth, poseFrame.depthMean, poseEnergy, poseFrame.flowEnergy),
+            styleMix: styleMix
         )
         updateBytes(virtualUniformBuffer, value: &virtualUniform)
 
@@ -87,7 +138,9 @@ final class MainRenderer: MetalViewRenderer {
             ) { encoder in
                 if let jointBuffer { encoder.setFragmentBuffer(jointBuffer, offset: 0, index: 0) }
                 if let boneBuffer { encoder.setFragmentBuffer(boneBuffer, offset: 0, index: 1) }
-                if let virtualUniformBuffer { encoder.setFragmentBuffer(virtualUniformBuffer, offset: 0, index: 2) }
+                if let segmentBuffer { encoder.setFragmentBuffer(segmentBuffer, offset: 0, index: 2) }
+                if let particleBuffer { encoder.setFragmentBuffer(particleBuffer, offset: 0, index: 3) }
+                if let virtualUniformBuffer { encoder.setFragmentBuffer(virtualUniformBuffer, offset: 0, index: 4) }
             }
         }
 
@@ -103,7 +156,10 @@ final class MainRenderer: MetalViewRenderer {
             ) { encoder in
                 if let jointBuffer { encoder.setFragmentBuffer(jointBuffer, offset: 0, index: 0) }
                 if let boneBuffer { encoder.setFragmentBuffer(boneBuffer, offset: 0, index: 1) }
-                if let overlayUniformBuffer { encoder.setFragmentBuffer(overlayUniformBuffer, offset: 0, index: 2) }
+                if let segmentBuffer { encoder.setFragmentBuffer(segmentBuffer, offset: 0, index: 2) }
+                if let particleBuffer { encoder.setFragmentBuffer(particleBuffer, offset: 0, index: 3) }
+                if let virtualUniformBuffer { encoder.setFragmentBuffer(virtualUniformBuffer, offset: 0, index: 4) }
+                if let overlayUniformBuffer { encoder.setFragmentBuffer(overlayUniformBuffer, offset: 0, index: 5) }
             }
         }
 
@@ -127,6 +183,13 @@ final class MainRenderer: MetalViewRenderer {
     override func keyDown(with event: NSEvent) -> Bool {
         if event.keyCode == 53 {
             NSApplication.shared.terminate(nil)
+            return true
+        }
+        if let character = event.charactersIgnoringModifiers?.first,
+           let mode = VirtualBodyRenderMode.from(character: character)
+        {
+            renderMode = mode
+            NSLog("Virtual body render mode -> \(mode.label)")
             return true
         }
         return false
@@ -226,8 +289,36 @@ final class MainRenderer: MetalViewRenderer {
     private func makeBuffers() {
         jointBuffer = device.makeBuffer(length: MemoryLayout<JointUniform>.stride * JOINT_COUNT)
         boneBuffer = device.makeBuffer(length: MemoryLayout<BoneUniform>.stride * BONES.count)
+        segmentBuffer = device.makeBuffer(length: MemoryLayout<SIMD2<Float>>.stride * MAX_SEGMENT_POINTS)
+        particleBuffer = device.makeBuffer(length: MemoryLayout<SIMD2<Float>>.stride * MAX_PARTICLE_POINTS)
         virtualUniformBuffer = device.makeBuffer(length: MemoryLayout<VirtualBodyUniform>.stride)
         overlayUniformBuffer = device.makeBuffer(length: MemoryLayout<OverlayUniform>.stride)
+    }
+
+    private func makeStyleMix(poseEnergy: Float) -> SIMD4<Float> {
+        guard poseFrame.detected else { return .zero }
+
+        switch renderMode {
+        case .auto:
+            let segmentDensity = Float(poseFrame.segmentCount) / Float(MAX_SEGMENT_POINTS)
+            let particleDensity = Float(poseFrame.particleCount) / Float(MAX_PARTICLE_POINTS)
+            let membrane = simd_clamp((poseFrame.depth * 0.72) + (segmentDensity * 0.38), 0, 1)
+            let ribbons = simd_clamp((poseFrame.flowEnergy * 1.15) + (simd_length(poseFrame.flowVector) * 0.8), 0, 1)
+            let swarm = simd_clamp((particleDensity * 0.7) + (poseEnergy * 0.45), 0, 1)
+            let quadrantPeak = max(max(poseFrame.quadrants.x, poseFrame.quadrants.y), max(poseFrame.quadrants.z, poseFrame.quadrants.w))
+            let prism = simd_clamp((abs(poseFrame.depth - 0.5) * 1.4) + (quadrantPeak * 0.6), 0, 1)
+            return SIMD4<Float>(membrane, ribbons, swarm, prism)
+        case .lattice:
+            return .zero
+        case .membrane:
+            return SIMD4<Float>(1, 0, 0, 0)
+        case .ribbons:
+            return SIMD4<Float>(0, 1, 0, 0)
+        case .swarm:
+            return SIMD4<Float>(0, 0, 1, 0)
+        case .prism:
+            return SIMD4<Float>(0, 0, 0, 1)
+        }
     }
 
     private func updateBuffer<T>(_ buffer: MTLBuffer?, with values: [T]) {

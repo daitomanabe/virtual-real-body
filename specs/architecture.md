@@ -38,6 +38,8 @@
     │  AVCapture  │  │  vrb_body (持続音)       │
     │  Metal GPU  │  │  vrb_onset/impact/...   │
     │  3 passes   │  │  reverb + delay FX bus  │
+    │  pose+seg+  │  │  aggressive FX bus      │
+    │  flow+depth │  │                         │
     └─────────────┘  └─────────────────────────┘
 ```
 

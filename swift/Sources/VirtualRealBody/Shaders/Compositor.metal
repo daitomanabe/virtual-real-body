@@ -27,7 +27,15 @@ struct VirtualBodyUniform {
     float2 resolution;
     uint jointCount;
     uint boneCount;
-    float2 pad;
+    uint segmentCount;
+    uint particleCount;
+    uint renderMode;
+    uint detected;
+    float2 com;
+    float2 flowVector;
+    float4 quadrants;
+    float4 analysis;
+    float4 styleMix;
 };
 
 struct OverlayUniform {
