@@ -218,6 +218,19 @@
 ## Iteration #10 — SC Builder
 
 ### Phase 3 Completion
+- `supercollider/vrb_receiver.scd` was added with `SynthDef`, `OSCdef`, FX buses, cleanup hooks, and the SC-side named-pair parser for OSC control.
+- Runtime verification remained partial because `sclang` is not installed in this environment; only the required Python import gate could be re-run at handoff time.
+
+## Iteration #18 — Python Builder
+
+### review.python Fix
+- Updated `python/analyzers/event_analyzer.py` so every `/trigger/*` OSC message now uses SC-compatible named-pair payloads instead of positional lists.
+- Trigger events now always send Python-derived `amp`, `freq`, and `pan`, including `/trigger/person_exit`, so the SuperCollider receiver no longer falls back to local defaults for those values.
+- Re-ran the required import gate with `cd python && python3 -c ...` and confirmed it still prints `all imports OK`.
+- Ran a direct `EventAnalyzer` probe and confirmed emitted trigger payloads are shaped like `['amp', value, 'freq', value, 'pan', value]`.
+
+### Next Hat Focus
+- Integrator should re-run the protocol verification pass and confirm the Python -> OSC -> SuperCollider contract is now aligned.
 - Created `supercollider/vrb_receiver.scd` with the requested 3-section structure: boot block, SynthDef/OSCdef registration block, and cleanup block.
 - Implemented `\vrb_body`, `\vrb_onset`, `\vrb_impact`, `\vrb_enter`, `\vrb_exit`, `\vrb_flow_burst`, `\vrb_reverb`, and `\vrb_delay` with `gate=1`, `out=0`, `doneAction: 2`, stereo output, and final `.tanh` soft clipping.
 - Added named-pair OSC parsing for `/synth/body`, `/fx/reverb/*`, `/fx/delay/*`, `/trigger/*`, and `/vrb/meta/detected`, including body amp gating on person enter/exit and detection state.

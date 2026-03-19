@@ -70,21 +70,27 @@ class EventAnalyzer(Analyzer):
 
         if self.detected and not self.prev_detected:
             events.append("person_enter")
-            messages.append(("/trigger/person_enter", [0.55, self.pose_speed, self._freq_from_com()]))
+            messages.append(self._trigger_message("/trigger/person_enter", amp=0.55, freq=self._freq_from_com()))
         if not self.detected and self.prev_detected:
             events.append("person_exit")
-            messages.append(("/trigger/person_exit", [0.45, max(self.prev_pose_speed, 0.1)]))
+            messages.append(
+                self._trigger_message(
+                    "/trigger/person_exit",
+                    amp=0.45,
+                    freq=self._freq_from_com(),
+                )
+            )
         if (
             self.pose_speed > MOTION_ONSET_THRESHOLD
             and self.prev_pose_speed <= MOTION_ONSET_THRESHOLD
             and self.cooldown == 0
         ):
             events.append("motion_onset")
-            messages.append(("/trigger/motion_onset", [0.7, self.pose_speed, self._freq_from_com()]))
+            messages.append(self._trigger_message("/trigger/motion_onset", amp=0.7, freq=self._freq_from_com()))
             self.cooldown = EVENT_COOLDOWN_FRAMES
         if accel > IMPACT_ACCEL_THRESHOLD and self.cooldown == 0:
             events.append("impact")
-            messages.append(("/trigger/impact", [0.8, accel, self._freq_from_com() * 1.1]))
+            messages.append(self._trigger_message("/trigger/impact", amp=0.8, freq=self._freq_from_com() * 1.1))
             self.cooldown = EVENT_COOLDOWN_FRAMES
         if (
             self.flow_energy > FLOW_BURST_THRESHOLD
@@ -92,7 +98,9 @@ class EventAnalyzer(Analyzer):
             and self.cooldown == 0
         ):
             events.append("flow_burst")
-            messages.append(("/trigger/flow_burst", [0.65, self.flow_energy, self._freq_from_com() * 0.9]))
+            messages.append(
+                self._trigger_message("/trigger/flow_burst", amp=0.65, freq=self._freq_from_com() * 0.9)
+            )
             self.cooldown = EVENT_COOLDOWN_FRAMES
 
         self.prev_detected = self.detected
@@ -143,3 +151,17 @@ class EventAnalyzer(Analyzer):
     def _freq_from_com(self) -> float:
         com_y = min(max(self.com[1], 0.0), 1.0)
         return SC_FREQ_HIGH * (SC_FREQ_LOW / SC_FREQ_HIGH) ** com_y
+
+    def _trigger_message(self, address: str, *, amp: float, freq: float) -> tuple[str, list[float | str]]:
+        pan = round((self.com[0] - 0.5) * 2.0, 4)
+        return (
+            address,
+            [
+                "amp",
+                round(max(amp, 0.0), 4),
+                "freq",
+                round(max(freq, 0.0), 4),
+                "pan",
+                pan,
+            ],
+        )

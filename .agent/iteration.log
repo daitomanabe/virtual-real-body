@@ -38,3 +38,4 @@
 [2026-03-19T08:32:49Z] iteration #16 | SC Builder | shader.built | done | 修正=supercollider/vrb_receiver.scd の named-pair parser を String/Symbol 両対応化, FX chain を整理, body state 更新を集約; 検証=python3 import gate成功, sclang未導入のためSC実行検証は未実施
 [2026-03-19T08:36:00Z] iteration #17 | Integrator | sc.built | issues | 検証=python import gate成功, swift build成功, Lygia include存在確認; 問題=python/analyzers/event_analyzer.py の /trigger/* OSC が positional list のままで SC named-pair 契約と不一致
 [2026-03-19T08:33:14Z] iteration start | Integrator | sc.built
+[2026-03-19T08:35:53Z] iteration #18 | Python Builder | review.python | done | 実装ファイル=python/analyzers/event_analyzer.py; 検証=python3 import gate成功, trigger OSC が amp/freq/pan named-pair で出力
