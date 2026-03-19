@@ -379,3 +379,17 @@
 - `cd swift && swift build` succeeded after the shader update.
 - `cd python && python3 -c ...` import gate succeeded using the actual public export `SparseFlowAnalyzer`.
 - `xcrun metal` remains unavailable in this environment, so offline Metal CLI syntax checks are still blocked on Xcode command line Metal tools.
+
+## Iteration #21 — SC Builder
+
+### Phase 3 Revalidation
+- Re-audited `supercollider/vrb_receiver.scd` against `specs/sc_receiver.md` after the latest shader handoff and kept the current implementation unchanged because the OSC addresses, named-pair parsing, FX bus chain, and SynthDef inventory still match the contract.
+- Confirmed the file still satisfies the SC-side static constraints required by this project: `gate=1` and `out=0` args on all SynthDefs, `doneAction: 2`, stereo output, `FreeVerb2`/`CombC` FX, `.tanh` clipping, and `NetAddr.langPort`-scoped OSCdefs.
+- No new SuperCollider source edits were needed in this iteration; the handoff is a revalidation pass rather than a receiver redesign.
+
+### Verification
+- Re-ran the mandatory Python import gate with the actual public analyzer export `SparseFlowAnalyzer` and confirmed it passes.
+- `sclang` is still unavailable in this environment, so runtime verification of `supercollider/vrb_receiver.scd` remains blocked on a local SuperCollider install.
+
+### Next Hat Focus
+- Integrator should resume end-to-end verification from `sc.built`, treating SuperCollider runtime execution as an environment dependency rather than a source-level blocker.
