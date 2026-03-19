@@ -473,3 +473,21 @@
 ### Next Hat Focus
 - Integrator can continue from `sc.built` with the SuperCollider source treated as revalidated.
 - Any remaining failure on the SC path now depends on local tool installation rather than receiver implementation changes.
+
+## Iteration #27 — Integrator
+
+### End-to-End Revalidation
+- Re-ran the mandatory Python import gate using the current public analyzer exports and confirmed it passes with `deserialise` restored.
+- Re-ran `swift build` and confirmed the Swift/Satin host still builds cleanly after the latest Python runtime fix.
+- Rechecked protocol alignment across Python, Swift, and SuperCollider: ZMQ remains on `tcp://*:5555` / `127.0.0.1:5555`, OSC targets remain `9000` and `57120`, `/synth/body`, `/fx/*`, `/trigger/*`, and `/vrb/meta/detected` addresses match on both producer and receiver sides, and SC named-pair parsing accepts the current string keys.
+- Confirmed the current Swift receiver can decode Python MessagePack payloads and still retains a Python `repr` fallback path for environments missing `msgpack`.
+- Verified the required Lygia include files actually present in `external/lygia` are `sdf/circleSDF.msl`, `sdf/lineSDF.msl`, and `draw/stroke.msl`, which match the checked-in shader sources.
+- Re-ran `python3 main.py --dry-run` and `python3 main.py --synthetic-input --frame-limit 2`; both succeed, so the Python runtime entrypoint no longer blocks integration.
+
+### Remaining Environment Limits
+- `sclang` is still not installed locally, so SC runtime execution could not be exercised in this environment even though the receiver source and OSC contract are aligned.
+- `xcrun metal` is still unavailable locally, so standalone Metal CLI compilation remains an environment dependency; host-side verification continues to rely on `swift build`.
+
+### Handoff
+- No further source-level integration mismatches were found in this pass.
+- `integration.done` is appropriate, with Final Reviewer expected to document the local-tooling limits (`sclang`, Metal CLI) in the completion artifacts rather than reopen implementation work.
