@@ -77,3 +77,18 @@
 ### Next Hat Focus
 - The next ready task after this plan closes is `python:core-transport`.
 - Python Builder should create the directory tree first, then establish the shared message/result contract before implementing analyzer-specific logic.
+
+## Iteration #3 — Ralph Coordination
+
+### Current State
+- `git.ready` and planning are complete; the workflow is positioned at the `plan.ready -> python_builder` boundary.
+- Runtime task `task-1773905687-5825` (`python:core-transport`) is now in progress as the only unblocked implementation task.
+- No relevant prior memory exists for Python engine scaffolding beyond the project bootstrap fixes already captured.
+
+### Delegation Decision
+- Re-emit `plan.ready` with a brief payload that points the Python Builder at `python:core-transport`.
+- Keep this iteration coordination-only; no implementation work belongs in Ralph.
+
+### Next Expected Work
+- Python Builder should scaffold `python/config.py`, `python/main.py`, `python/core/`, and `python/transport/` first.
+- Once core transport is built and importable, the builder can emit `python.built` to unblock Swift work and the analyzer task chain.
