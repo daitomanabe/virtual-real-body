@@ -218,6 +218,23 @@
 ## Iteration #10 — SC Builder
 
 ### Phase 3 Completion
+
+## Iteration #22 — Integrator
+
+### Verification Summary
+- Re-ran the mandatory Python import gate and it now passes with the public analyzer exports plus `transport.zmq_publisher.deserialise`.
+- Re-ran `cd swift && swift build`; build completes successfully.
+- Re-checked protocol constants: Python uses `tcp://*:5555`, OSC `9000` and `57120`, and Swift `PoseData.swift` still targets ZMQ port `5555`.
+- Re-checked Lygia includes on disk: `external/lygia/sdf/circleSDF.msl`, `external/lygia/sdf/lineSDF.msl`, and `external/lygia/draw/stroke.msl` exist.
+- Re-checked SC named-pair parsing against current Python trigger payloads; the `String`/`Symbol` handling now matches the emitted `/trigger/*` messages.
+
+### Blocking Issue
+- `python/main.py` still aborts normal execution with `SystemExit("Runtime capture loop is intentionally deferred until analyzer implementation is complete.")`.
+- Because of that, the project still fails the explicit success criterion `python3 main.py が起動しカメラから解析を開始できる`.
+- This is a Python-side integration blocker, so the next event should remain `review.python` rather than `integration.done`.
+
+### Next Work
+- Python Builder needs to replace the deferred `SystemExit` path with the actual camera/engine startup flow and re-verify `python3 main.py --dry-run` plus a non-dry runtime entry path.
 - `supercollider/vrb_receiver.scd` now accepts the current named-pair payload shape for continuous controls and trigger synths.
 - SuperCollider runtime verification is still blocked by missing `sclang` in this environment, but the file is aligned with the Python OSC contract.
 
