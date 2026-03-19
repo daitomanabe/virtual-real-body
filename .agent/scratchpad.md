@@ -183,3 +183,22 @@
 ### Delegation Decision
 - Re-emit `python.built` with a brief recovery payload so Swift Builder can continue from the Python-complete boundary.
 - Keep this iteration coordination-only; do not touch the untracked Swift worktree from Ralph.
+
+## Iteration #8 — Swift Builder
+
+### Phase 2 Completion
+- Verified the existing Swift app-shell scaffold against `specs/swift_renderer.md` and kept the Network.framework fallback path for pose reception in place.
+- Fixed `LygiaResolver` include parsing so runtime Metal source expansion can compile, and corrected the offscreen render-pass/buffer update code in `MainRenderer` to satisfy the current Metal/Swift APIs.
+- Confirmed `cd swift && swift build` succeeds, then re-ran the required `python3` import gate successfully before handing off.
+
+### Phase 2: Swift Renderer（Satin + LYGIA）
+- [x] `swift/Package.swift` — Satin submodule dependency
+- [x] `swift/Sources/VirtualRealBody/App/main.swift` + `AppDelegate.swift` — NSApp / fullscreen MTKView
+- [x] `swift/Sources/VirtualRealBody/Data/PoseData.swift` — バイナリプロトコル + GPU uniform structs
+- [x] `swift/Sources/VirtualRealBody/Input/PoseReceiver.swift` — TCP/MessagePack fallback receiver for `yolo.pose` / `mp.pose`
+- [x] `swift/Sources/VirtualRealBody/Input/CameraCapture.swift` — AVCapture → MTLTexture
+- [x] `swift/Sources/VirtualRealBody/Rendering/LygiaResolver.swift` — `#include "lygia/..."` inline expansion
+- [x] `swift/Sources/VirtualRealBody/Rendering/MainRenderer.swift` — MetalViewRenderer subclass with 3-pass pipeline shell
+
+### Next Hat Focus
+- Shader Builder can now focus on the three `.metal` passes and the runtime library entry points on top of a buildable Swift host.

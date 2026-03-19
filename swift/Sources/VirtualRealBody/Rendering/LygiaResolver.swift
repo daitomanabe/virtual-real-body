@@ -5,9 +5,10 @@ enum LygiaResolver {
         .appendingPathComponent("../external/lygia")
         .standardizedFileURL
 
+    private static let includePattern = #"#include\s+"([^"]+)""#
+
     static func resolve(source: String, sourceURL: URL? = nil, visited: inout Set<String>) throws -> String {
-        let pattern = #/#include\s+"([^"]+)""#
-        let regex = try NSRegularExpression(pattern: pattern)
+        let regex = try NSRegularExpression(pattern: includePattern)
         let nsRange = NSRange(source.startIndex..<source.endIndex, in: source)
         let matches = regex.matches(in: source, range: nsRange).reversed()
         var resolved = source

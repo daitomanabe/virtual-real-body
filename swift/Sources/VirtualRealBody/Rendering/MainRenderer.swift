@@ -197,7 +197,10 @@ final class MainRenderer: MetalViewRenderer {
         descriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         descriptor.renderTargetWidth = texture.width
         descriptor.renderTargetHeight = texture.height
-        descriptor.label = label
+        descriptor.imageblockSampleLength = 0
+        descriptor.defaultRasterSampleCount = 1
+        descriptor.tileWidth = 0
+        descriptor.tileHeight = 0
         return descriptor
     }
 
@@ -230,13 +233,17 @@ final class MainRenderer: MetalViewRenderer {
     private func updateBuffer<T>(_ buffer: MTLBuffer?, with values: [T]) {
         guard let buffer else { return }
         let size = MemoryLayout<T>.stride * values.count
-        values.withUnsafeBytes { rawBuffer in
+        _ = values.withUnsafeBytes { rawBuffer in
             memcpy(buffer.contents(), rawBuffer.baseAddress, size)
         }
+        buffer.didModifyRange(0..<size)
     }
 
     private func updateBytes<T>(_ buffer: MTLBuffer?, value: inout T) {
         guard let buffer else { return }
-        memcpy(buffer.contents(), &value, MemoryLayout<T>.stride)
+        _ = withUnsafePointer(to: &value) { pointer in
+            memcpy(buffer.contents(), pointer, MemoryLayout<T>.stride)
+        }
+        buffer.didModifyRange(0..<MemoryLayout<T>.stride)
     }
 }
