@@ -458,3 +458,18 @@
 
 ### Next Hat Focus
 - Shader Builder can proceed from a clean `swift.built` handoff without additional Swift-side fixes in this iteration.
+
+## Iteration #26 — SC Builder
+
+### Phase 3 Revalidation
+- Re-read `supercollider/vrb_receiver.scd` after the latest `shader.built` event and kept the source unchanged because the current file still matches the required three-section structure, SynthDef inventory, named-pair OSC parsing, and FX-bus topology.
+- Confirmed the SC receiver contract remains aligned with the current Python event payloads: `/synth/body` and `/trigger/*` accept string/symbol named pairs, `/fx/*` addresses remain scalar, and `/vrb/meta/detected` still gates the sustained body voice.
+- No further SC-side source edits are justified in this iteration; the remaining gap is environmental verification, not a code mismatch.
+
+### Verification
+- Re-ran the mandatory Python import gate before handoff and confirmed it still passes.
+- Checked for `sclang` locally; it is still unavailable, so `sclang supercollider/vrb_receiver.scd 2>&1 | grep ERROR` remains blocked until SuperCollider is installed.
+
+### Next Hat Focus
+- Integrator can continue from `sc.built` with the SuperCollider source treated as revalidated.
+- Any remaining failure on the SC path now depends on local tool installation rather than receiver implementation changes.
