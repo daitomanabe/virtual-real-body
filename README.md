@@ -174,6 +174,20 @@ python3 server.py 3000
 
 If `3000` is already taken, start `server.py` on another free port, then open `http://127.0.0.1:3000/outputs/preview-batches/img_6770_batch/index.html` with that port.
 
+To render every source clip in an assets folder and generate a top-level collection index:
+
+```bash
+.venv/bin/python python/tools/render_assets_collection.py \
+  --assets-dir /Users/daitomacm5/development/sandbox/assets \
+  --output-root outputs/preview-batches
+```
+
+This writes:
+
+- one preview batch per source video, e.g. `img_6708_batch` and `img_6770_batch`
+- `assets_collection_manifest.json`
+- `assets_collection_index.html` linking the per-video galleries
+
 ## ZMQ topics
 
 | Topic | Purpose |
