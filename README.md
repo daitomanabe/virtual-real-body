@@ -140,6 +140,29 @@ sclang supercollider/vrb_receiver.scd
 
 Then open `http://127.0.0.1:8080/`.
 
+### 5. Generate preview batches from a source performance clip
+
+```bash
+.venv/bin/python python/tools/preview_batch.py \
+  --video-file /Users/daitomacm5/development/sandbox/assets/IMG_6770.mov \
+  --output-dir outputs/preview-batches/img_6770_batch
+```
+
+This writes:
+
+- `36` mp4 previews
+- poster images for each variant
+- `manifest.json`
+- `index.html` gallery
+
+To browse the gallery with seekable video playback:
+
+```bash
+python3 server.py 3000
+```
+
+If `3000` is already taken, start `server.py` on another free port, then open `http://127.0.0.1:3000/outputs/preview-batches/img_6770_batch/index.html` with that port.
+
 ## ZMQ topics
 
 | Topic | Purpose |
