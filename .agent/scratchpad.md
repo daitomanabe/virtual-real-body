@@ -367,3 +367,15 @@
 ### Verification
 - Re-ran the required Python import gate with the actual analyzer exports from `python/analyzers/__init__.py` and confirmed it passes.
 - `sclang` is still unavailable in this environment, so syntax/runtime verification of `supercollider/vrb_receiver.scd` remains blocked on a local SuperCollider install.
+
+## Iteration #20 — Shader Builder
+
+### Shader Pass Validation
+- Revalidated the three Metal shader files against the current Swift host after the latest `swift.built` handoff.
+- Added explicit `velocityVertex` and `velocityFragment` entry points to `VirtualBody.metal` so the velocity-vector pass exists as a first-class shader path alongside the fullscreen SDF composition.
+- Confirmed the current LYGIA checkout contains `circleSDF`, `lineSDF`, `stroke`, `palette`, `map`, and `fbm`; `lineSDF.msl` remains the available segment-distance equivalent.
+
+### Verification
+- `cd swift && swift build` succeeded after the shader update.
+- `cd python && python3 -c ...` import gate succeeded using the actual public export `SparseFlowAnalyzer`.
+- `xcrun metal` remains unavailable in this environment, so offline Metal CLI syntax checks are still blocked on Xcode command line Metal tools.

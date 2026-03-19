@@ -15,6 +15,13 @@ struct RasterizerData {
     float2 uv;
 };
 
+struct VelocityRasterizerData {
+    float4 position [[position]];
+    float speed;
+    float energy;
+    float visibility;
+};
+
 struct JointUniform {
     float2 positionXY;
     float speed;
@@ -63,6 +70,12 @@ vertex RasterizerData fullscreenVertex(uint vertexID [[vertex_id]]) {
 #endif
 
 constant uint kMaxJointCount = 33;
+
+float2 vrbClipPosition(float2 uv, float2 resolution) {
+    float2 clip = uv * 2.0 - 1.0;
+    clip.y *= -1.0;
+    return clip;
+}
 
 float2 vrbAspectUV(float2 uv, float2 resolution) {
     float2 centered = uv * 2.0 - 1.0;
@@ -118,6 +131,51 @@ float4 vrbVelocityOverlay(float2 uv, constant JointUniform *joints, constant Vir
     }
 
     return float4(color, saturate(alpha));
+}
+
+vertex VelocityRasterizerData velocityVertex(
+    uint vertexID [[vertex_id]],
+    uint instanceID [[instance_id]],
+    constant JointUniform *joints [[buffer(0)]],
+    constant VirtualBodyUniform &uniforms [[buffer(1)]]
+) {
+    VelocityRasterizerData out;
+
+    if (instanceID >= min(uniforms.jointCount, kMaxJointCount)) {
+        out.position = float4(0.0, 0.0, 0.0, 1.0);
+        out.speed = 0.0;
+        out.energy = 0.0;
+        out.visibility = 0.0;
+        return out;
+    }
+
+    JointUniform joint = joints[instanceID];
+    float2 start = vrbClipPosition(joint.positionXY, uniforms.resolution);
+    float2 velocity = float2(
+        cos(uniforms.time * 0.9 + float(instanceID) * 0.37),
+        sin(uniforms.time * 1.3 + float(instanceID) * 0.21)
+    ) * joint.energy * 0.16;
+    float2 end = start + float2(velocity.x, -velocity.y);
+    float2 clipPosition = vertexID == 0 ? start : end;
+
+    out.position = float4(clipPosition, 0.0, 1.0);
+    out.speed = joint.speed;
+    out.energy = joint.energy;
+    out.visibility = joint.visibility;
+    return out;
+}
+
+fragment float4 velocityFragment(VelocityRasterizerData in [[stage_in]]) {
+    float visibility = saturate(in.visibility);
+    float3 tint = palette(
+        saturate(in.speed * 0.75 + in.energy * 0.25),
+        float3(0.24, 0.42, 0.56),
+        float3(0.35, 0.28, 0.38),
+        float3(1.0, 1.0, 1.0),
+        float3(0.15, 0.22, 0.32)
+    );
+    float alpha = saturate(map(clamp(in.energy, 0.0, 1.0), 0.0, 1.0, 0.2, 0.95) * visibility);
+    return float4(tint, alpha);
 }
 
 fragment float4 virtualBodyFragment(
