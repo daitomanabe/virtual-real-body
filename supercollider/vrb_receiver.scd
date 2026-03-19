@@ -46,10 +46,21 @@ s.boot;
 		var makeTrigger, setBodyState, refreshFxState, updateDetected, updateTriggerState;
 
 		SynthDef(\vrb_body, {
-			|out=0, gate=1, freq=220, amp=0.0, cutoff=1200, pan=0, mode=0, texture=0.35, noiseMix=0.18, subMix=0.55, motion=0.35, resonance=0.22|
+			|out=0, gate=1, freq=220, amp=0.0, cutoff=1200, pan=0, mode=0, texture=0.35, noiseMix=0.18, subMix=0.55, motion=0.35, resonance=0.22,
+			poseLift=0.0, poseSpread=0.0, poseTwist=0.0, poseGesture=0.0, poseStride=0.0, poseSymmetry=0.5, poseHeight=0.5, poseLean=0.0, poseEnergy=0.0|
 			var env, freqCtl, ampCtl, cutoffCtl, panCtl, modeCtl, textureCtl, noiseCtl, subCtl, motionCtl, resonanceCtl;
-			var motionLfo, layerA, layerB, layerC, layerD, harmonic, breath, click, sig, drive;
-			freqCtl = Lag.kr(freq.clip(35, 2400), 0.08);
+			var liftCtl, spreadCtl, twistCtl, gestureCtl, strideCtl, symmetryCtl, heightCtl, leanCtl, energyCtl;
+			var motionLfo, spectralLfo, layerA, layerB, layerC, layerD, harmonic, breath, click, resonCloud, sig, drive, subFreq;
+			liftCtl = Lag.kr(poseLift.clip(0, 1), 0.12);
+			spreadCtl = Lag.kr(poseSpread.clip(0, 1), 0.12);
+			twistCtl = Lag.kr(poseTwist.clip(-1, 1), 0.1);
+			gestureCtl = Lag.kr(poseGesture.clip(0, 1), 0.08);
+			strideCtl = Lag.kr(poseStride.clip(0, 1), 0.12);
+			symmetryCtl = Lag.kr(poseSymmetry.clip(0, 1), 0.16);
+			heightCtl = Lag.kr(poseHeight.clip(0, 1), 0.12);
+			leanCtl = Lag.kr(poseLean.clip(-1, 1), 0.12);
+			energyCtl = Lag.kr(poseEnergy.clip(0, 1), 0.08);
+			freqCtl = Lag.kr(freq.clip(35, 2400), 0.08) * heightCtl.linexp(0.0, 1.0, 0.82, 1.18) * liftCtl.linexp(0.0, 1.0, 0.96, 1.14);
 			ampCtl = Lag.kr(amp.clip(0, 1), 0.14);
 			cutoffCtl = Lag.kr(cutoff.clip(120, 10000), 0.14);
 			panCtl = Lag.kr(pan.clip(-1, 1), 0.1);
@@ -60,54 +71,73 @@ s.boot;
 			motionCtl = Lag.kr(motion.clip(0, 1), 0.18);
 			resonanceCtl = Lag.kr(resonance.clip(0.08, 0.95), 0.16);
 			env = EnvGen.kr(Env.asr(0.25, 1.0, 1.3), gate: gate, doneAction: 2);
-			motionLfo = LFNoise2.kr(motionCtl.linlin(0.0, 1.0, 0.25, 6.0)).range(
-				1.0 - (motionCtl * 0.08),
-				1.0 + (motionCtl * 0.08)
+			motionLfo = LFNoise2.kr((motionCtl + (gestureCtl * 0.6)).linlin(0.0, 1.6, 0.25, 8.0)).range(
+				1.0 - (motionCtl * 0.08) - (gestureCtl * 0.05),
+				1.0 + (motionCtl * 0.08) + (gestureCtl * 0.05)
 			);
+			spectralLfo = SinOsc.kr(
+				(0.08 + (spreadCtl * 0.8) + (gestureCtl * 1.4)).clip(0.05, 8.0),
+				twistCtl * pi,
+				spreadCtl.linlin(0.0, 1.0, 0.0, 0.06),
+				1.0
+			);
+			subFreq = freqCtl * (0.42 + (strideCtl * 0.14));
 
 			layerA = (
-				SinOsc.ar(freqCtl * 0.5 * motionLfo, 0, 0.36 * subCtl)
-				+ VarSaw.ar(freqCtl * motionLfo, 0, textureCtl.linlin(0.0, 1.0, 0.24, 0.72), 0.18)
-				+ SinOsc.ar(freqCtl * 1.5, 0.3, 0.12)
+				SinOsc.ar(subFreq * motionLfo, 0, 0.34 * subCtl)
+				+ VarSaw.ar(freqCtl * motionLfo * spectralLfo, 0, textureCtl.linlin(0.0, 1.0, 0.22, 0.76), 0.18 + (spreadCtl * 0.08))
+				+ SinOsc.ar(freqCtl * (1.4 + (liftCtl * 0.35)), 0.3, 0.1 + (energyCtl * 0.06))
 			);
 
 			layerB = (
-				Pulse.ar(freqCtl * motionLfo, textureCtl.linlin(0.0, 1.0, 0.22, 0.62), 0.14)
-				+ Blip.ar(freqCtl * 0.5, textureCtl.linlin(0.0, 1.0, 3.0, 18.0), 0.18)
+				Pulse.ar(freqCtl * motionLfo, textureCtl.linlin(0.0, 1.0, 0.22, 0.62) + (strideCtl * 0.08), 0.14)
+				+ Blip.ar(freqCtl * (0.5 + (spreadCtl * 0.08)), textureCtl.linlin(0.0, 1.0, 3.0, 18.0) + (gestureCtl * 6.0), 0.16 + (energyCtl * 0.06))
 				+ SinOsc.ar(freqCtl * 2.0, 0, 0.1)
 			);
 
 			layerC = (
 				Formant.ar(
-					freqCtl * [1.0, 1.004],
-					(cutoffCtl * textureCtl.linlin(0.0, 1.0, 0.45, 1.1)).clip(250, 5000),
-					(cutoffCtl * textureCtl.linlin(0.0, 1.0, 0.12, 0.32)).clip(120, 1800)
-				).sum * 0.12
-				+ SinOsc.ar(freqCtl * 0.5, 0, 0.2 * subCtl)
+					freqCtl * [1.0, 1.004 + (spreadCtl * 0.018)],
+					(cutoffCtl * textureCtl.linlin(0.0, 1.0, 0.45, 1.1) * liftCtl.linlin(0.0, 1.0, 0.8, 1.18)).clip(250, 5000),
+					(cutoffCtl * textureCtl.linlin(0.0, 1.0, 0.12, 0.32) * symmetryCtl.linlin(0.0, 1.0, 0.86, 1.1)).clip(120, 1800)
+				).sum * (0.12 + (liftCtl * 0.06))
+				+ SinOsc.ar(subFreq, 0, 0.18 * subCtl)
 				+ Saw.ar(freqCtl * 0.25, 0.08)
 			);
 
 			layerD = (
 				PMOsc.ar(
-					freqCtl * motionLfo,
-					(freqCtl * textureCtl.linlin(0.0, 1.0, 1.5, 4.5)).clip(60, 9000),
-					textureCtl.linlin(0.0, 1.0, 0.2, 3.0),
+					freqCtl * motionLfo * spectralLfo,
+					(freqCtl * textureCtl.linlin(0.0, 1.0, 1.5, 4.5) * spreadCtl.linlin(0.0, 1.0, 1.0, 1.35)).clip(60, 9000),
+					textureCtl.linlin(0.0, 1.0, 0.2, 3.0) + (gestureCtl * 1.4) + (abs(twistCtl) * 0.8),
 					0,
 					0.18
 				)
-				+ SinOsc.ar(freqCtl * 0.25, 0, 0.18 * subCtl)
+				+ SinOsc.ar(subFreq * 0.5, 0, 0.16 * subCtl)
 				+ VarSaw.ar(freqCtl * 2.0, 0, 0.2, 0.06)
 			);
 
 			harmonic = SelectX.ar(modeCtl, [layerA, layerB, layerC, layerD]);
-			harmonic = RLPF.ar(harmonic, cutoffCtl, resonanceCtl);
-			breath = HPF.ar(PinkNoise.ar(0.16), (cutoffCtl * 0.3).clip(150, 3400)) * noiseCtl * (0.12 + (ampCtl * 0.12));
-			click = BPF.ar(GrayNoise.ar(0.08), (cutoffCtl * 1.5).clip(800, 12000), 0.12) * (textureCtl * 0.12);
-			sig = LeakDC.ar(harmonic + breath + click);
+			harmonic = RLPF.ar(harmonic, cutoffCtl * spreadCtl.linlin(0.0, 1.0, 0.9, 1.22), resonanceCtl);
+			breath = HPF.ar(
+				PinkNoise.ar(0.16 + (gestureCtl * 0.12)),
+				(cutoffCtl * (0.24 + (liftCtl * 0.26))).clip(150, 4200)
+			) * (noiseCtl + (gestureCtl * 0.22) + ((1.0 - symmetryCtl) * 0.12)) * (0.1 + (ampCtl * 0.12));
+			click = BPF.ar(
+				GrayNoise.ar(0.08 + (gestureCtl * 0.08)),
+				(cutoffCtl * (1.2 + (liftCtl * 1.6))).clip(800, 12000),
+				0.12
+			) * ((textureCtl * 0.12) + (energyCtl * 0.08));
+			resonCloud = Ringz.ar(
+				Dust2.ar(2 + (gestureCtl * 18) + (strideCtl * 10)),
+				(freqCtl * [1.0, 1.0 + (spreadCtl * 0.45), 2.0 + liftCtl]).clip(120, 9000),
+				0.05 + (strideCtl * 0.08)
+			).sum * (0.04 + (energyCtl * 0.14));
+			sig = LeakDC.ar(harmonic + breath + click + resonCloud);
 			sig = HPF.ar(sig, 30);
-			drive = 1.1 + (ampCtl * 2.2) + (textureCtl * 1.4);
+			drive = 1.1 + (ampCtl * 2.2) + (textureCtl * 1.4) + (gestureCtl * 1.4) + ((1.0 - symmetryCtl) * 0.7);
 			sig = (sig * drive).tanh / drive.sqrt;
-			sig = Pan2.ar(sig * env * ampCtl, panCtl);
+			sig = Pan2.ar(sig * env * ampCtl, (panCtl + (leanCtl * 0.3) + (twistCtl * 0.12)).clip(-1, 1));
 			Out.ar(out, sig);
 		}).add;
 
@@ -389,6 +419,17 @@ s.boot;
 			motion: 0.35,
 			resonance: 0.22
 		);
+		~poseParams = (
+			lift: 0.0,
+			spread: 0.0,
+			twist: 0.0,
+			gesture: 0.0,
+			stride: 0.0,
+			symmetry: 0.5,
+			height: 0.5,
+			lean: 0.0,
+			energy: 0.0
+		);
 		~triggerUi = (
 			onset: (mode: 0.0, color: 0.35),
 			impact: (mode: 0.0, color: 0.45),
@@ -419,7 +460,16 @@ s.boot;
 			\noiseMix, ~bodyUi[\noiseMix],
 			\subMix, ~bodyUi[\subMix],
 			\motion, ~bodyUi[\motion],
-			\resonance, ~bodyUi[\resonance]
+			\resonance, ~bodyUi[\resonance],
+			\poseLift, ~poseParams[\lift],
+			\poseSpread, ~poseParams[\spread],
+			\poseTwist, ~poseParams[\twist],
+			\poseGesture, ~poseParams[\gesture],
+			\poseStride, ~poseParams[\stride],
+			\poseSymmetry, ~poseParams[\symmetry],
+			\poseHeight, ~poseParams[\height],
+			\poseLean, ~poseParams[\lean],
+			\poseEnergy, ~poseParams[\energy]
 		]);
 
 		~aggro = Synth.new(\vrb_aggression, [
@@ -577,7 +627,16 @@ s.boot;
 					\noiseMix, ~bodyUi[\noiseMix],
 					\subMix, ~bodyUi[\subMix],
 					\motion, ~bodyUi[\motion],
-					\resonance, ~bodyUi[\resonance]
+					\resonance, ~bodyUi[\resonance],
+					\poseLift, ~poseParams[\lift],
+					\poseSpread, ~poseParams[\spread],
+					\poseTwist, ~poseParams[\twist],
+					\poseGesture, ~poseParams[\gesture],
+					\poseStride, ~poseParams[\stride],
+					\poseSymmetry, ~poseParams[\symmetry],
+					\poseHeight, ~poseParams[\height],
+					\poseLean, ~poseParams[\lean],
+					\poseEnergy, ~poseParams[\energy]
 				);
 			};
 		};
@@ -644,6 +703,30 @@ s.boot;
 			if(resonance.notNil) { ~bodyUi[\resonance] = resonance.asFloat.clip(0.08, 0.95) };
 			setBodyState.();
 		}, '/ui/body', recvPort: NetAddr.langPort);
+
+		OSCdef(\poseBody, { |msg|
+			var values, lift, spread, twist, gesture, stride, symmetry, height, lean, energy;
+			values = makeNamedValueParser.(msg);
+			lift = values.at(\lift);
+			spread = values.at(\spread);
+			twist = values.at(\twist);
+			gesture = values.at(\gesture);
+			stride = values.at(\stride);
+			symmetry = values.at(\symmetry);
+			height = values.at(\height);
+			lean = values.at(\lean);
+			energy = values.at(\energy);
+			if(lift.notNil) { ~poseParams[\lift] = lift.asFloat.clip(0, 1) };
+			if(spread.notNil) { ~poseParams[\spread] = spread.asFloat.clip(0, 1) };
+			if(twist.notNil) { ~poseParams[\twist] = twist.asFloat.clip(-1, 1) };
+			if(gesture.notNil) { ~poseParams[\gesture] = gesture.asFloat.clip(0, 1) };
+			if(stride.notNil) { ~poseParams[\stride] = stride.asFloat.clip(0, 1) };
+			if(symmetry.notNil) { ~poseParams[\symmetry] = symmetry.asFloat.clip(0, 1) };
+			if(height.notNil) { ~poseParams[\height] = height.asFloat.clip(0, 1) };
+			if(lean.notNil) { ~poseParams[\lean] = lean.asFloat.clip(-1, 1) };
+			if(energy.notNil) { ~poseParams[\energy] = energy.asFloat.clip(0, 1) };
+			setBodyState.();
+		}, '/synth/pose', recvPort: NetAddr.langPort);
 
 		OSCdef(\reverbMix, { |msg|
 			~fxUi[\reverb][\mix] = firstValue.(msg, ~fxUi[\reverb][\mix]).clip(0, 1);
@@ -888,6 +971,7 @@ s.boot;
 		~vrbCleanup = {
 			if(OSCdef(\body).notNil) { OSCdef(\body).free };
 			if(OSCdef(\uiBody).notNil) { OSCdef(\uiBody).free };
+			if(OSCdef(\poseBody).notNil) { OSCdef(\poseBody).free };
 			if(OSCdef(\reverbMix).notNil) { OSCdef(\reverbMix).free };
 			if(OSCdef(\reverbRoom).notNil) { OSCdef(\reverbRoom).free };
 			if(OSCdef(\delayTime).notNil) { OSCdef(\delayTime).free };

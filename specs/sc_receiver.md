@@ -21,6 +21,7 @@ s.options.sampleRate = 44100;
 
 ```text
 /synth/body             [freq, v, amp, v, cutoff, v, pan, v]
+/synth/pose             [lift, v, spread, v, twist, v, gesture, v, stride, v, symmetry, v, height, v, lean, v, energy, v]
 /fx/reverb/mix          [v]
 /fx/reverb/room         [v]
 /fx/delay/time          [v]
@@ -56,6 +57,7 @@ s.options.sampleRate = 44100;
 ## SynthDefs
 
 - `\vrb_body` 持続音。sub layer + torso harmonic layer + formant layer + breath/shimmer noise を `cutoff` と `amp` に追従させる
+- `\vrb_body` は `/synth/pose` の `lift / spread / twist / gesture / stride / symmetry / height / lean / energy` を受けて、周波数、倍音分布、ノイズ量、レゾネータ密度、歪み量を連続変調する
 - `\vrb_body` は 4 mode を持つ。`Core / Pulse / Formant / PM` を `SelectX` で補間し、`texture / noiseMix / subMix / motion / resonance` を外部から操作する
 - `\vrb_onset` モーション開始の短い strike。filtered noise + pitched body
 - `\vrb_impact` 衝撃音。low thump + crack + short ring
@@ -79,6 +81,7 @@ s.options.sampleRate = 44100;
 - `person_enter` / `person_exit` は `pan` を受け取った場合に空間位置へ反映する
 - cleanup は自動実行せず、必要なら `~vrbCleanup.()` で呼べるようにする
 - WebUI bridge は `/synth/body` と `/ui/*` を併用し、state mirror を保つ
+- pose 由来の内部音響変調は `/ui/body` に混ぜず、`/synth/pose` の専用 OSC で受ける
 
 ## Named Pair Parsing
 

@@ -208,6 +208,7 @@ This writes:
 | Address | Target | Payload |
 | --- | --- | --- |
 | `/synth/body` | SuperCollider | named pairs `freq/amp/cutoff/pan` |
+| `/synth/pose` | SuperCollider | named pairs `lift/spread/twist/gesture/stride/symmetry/height/lean/energy` |
 | `/fx/reverb/mix` | SuperCollider | `[mix]` |
 | `/fx/reverb/room` | SuperCollider | `[room]` |
 | `/fx/delay/time` | SuperCollider | `[seconds]` |

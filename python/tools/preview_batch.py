@@ -33,6 +33,7 @@ from analyzers import (  # noqa: E402
     YOLOSegAnalyzer,
 )
 from core.analyzer_base import AnalysisResult  # noqa: E402
+from pose_music import compute_pose_music_metrics, copy_pose_person, neutral_pose_metrics  # noqa: E402
 
 
 COCO_EDGES = [
@@ -1296,6 +1297,21 @@ def bbox_to_px(bbox: list[float], width: int, height: int) -> tuple[int, int, in
     return x1, y1, x2, y2
 
 
+def extract_pose_metric_frames(video: VideoAnalysis) -> list[dict[str, float]]:
+    metrics: list[dict[str, float]] = []
+    previous_person: dict[str, object] | None = None
+    for frame in video.frames:
+        persons = frame.pose.data.get("persons", [])
+        if persons:
+            pose_metrics = compute_pose_music_metrics(persons[0], previous_person)
+            previous_person = copy_pose_person(persons[0])
+        else:
+            pose_metrics = neutral_pose_metrics()
+            previous_person = None
+        metrics.append(pose_metrics)
+    return metrics
+
+
 def synthesize_audio(video: VideoAnalysis, variant: Variant, sample_rate: int, fps: float) -> np.ndarray:
     frame_count = len(video.frames)
     duration = frame_count / fps
@@ -1309,33 +1325,62 @@ def synthesize_audio(video: VideoAnalysis, variant: Variant, sample_rate: int, f
     com = np.array([frame.event.data.get("com", [0.5, 0.5]) for frame in video.frames], dtype=np.float64)
     com_x = com[:, 0]
     com_y = com[:, 1]
+    pose_metric_frames = extract_pose_metric_frames(video)
+    lift = np.array([metrics["lift"] for metrics in pose_metric_frames], dtype=np.float64)
+    spread = np.array([metrics["spread"] for metrics in pose_metric_frames], dtype=np.float64)
+    twist = np.array([metrics["twist"] for metrics in pose_metric_frames], dtype=np.float64)
+    gesture = np.array([metrics["gesture"] for metrics in pose_metric_frames], dtype=np.float64)
+    stride = np.array([metrics["stride"] for metrics in pose_metric_frames], dtype=np.float64)
+    symmetry = np.array([metrics["symmetry"] for metrics in pose_metric_frames], dtype=np.float64)
+    height = np.array([metrics["height"] for metrics in pose_metric_frames], dtype=np.float64)
+    lean = np.array([metrics["lean"] for metrics in pose_metric_frames], dtype=np.float64)
+    energy = np.array([metrics["energy"] for metrics in pose_metric_frames], dtype=np.float64)
 
     variant_seed = zlib.crc32(variant.slug.encode("utf-8")) & 0xFFFFFFFF
     rng = np.random.default_rng(variant_seed)
     detune = 1.0 + (((variant_seed % 19) - 9) * 0.0018)
     hue_bias = 0.94 + variant.visual.base_hue * 0.14
 
-    freq_curve = np.interp(sample_times, frame_times, 65.0 + (1.0 - com_y) * 420.0) * detune * hue_bias
+    height_curve = np.interp(sample_times, frame_times, height)
+    lift_curve = np.interp(sample_times, frame_times, lift)
+    spread_curve = np.interp(sample_times, frame_times, spread)
+    twist_curve = np.interp(sample_times, frame_times, twist)
+    gesture_curve = np.interp(sample_times, frame_times, gesture)
+    stride_curve = np.interp(sample_times, frame_times, stride)
+    symmetry_curve = np.interp(sample_times, frame_times, symmetry)
+    lean_curve = np.interp(sample_times, frame_times, lean)
+    energy_curve = np.interp(sample_times, frame_times, energy)
+
+    freq_curve = np.interp(
+        sample_times,
+        frame_times,
+        62.0
+        + (height * 260.0)
+        + (lift * 180.0)
+        + (stride * 90.0)
+        + ((1.0 - symmetry) * 40.0),
+    ) * detune * hue_bias * (1.0 + (lean_curve * 0.03))
     speed_curve = np.interp(sample_times, frame_times, pose_speed)
     flow_curve = np.interp(sample_times, frame_times, flow_energy)
     depth_curve = np.interp(sample_times, frame_times, depth)
-    pan_curve = np.interp(sample_times, frame_times, (com_x - 0.5) * variant.audio.width * 1.8)
-    amp_curve = variant.audio.base_gain * (0.18 + speed_curve * (0.86 + variant.visual.flow_gain * 0.12))
+    pan_curve = np.interp(sample_times, frame_times, (com_x - 0.5) * variant.audio.width * 1.4) + (lean_curve * 0.26) + (twist_curve * 0.12)
+    amp_curve = variant.audio.base_gain * (0.1 + (energy_curve * 0.72) + (gesture_curve * 0.18) + (speed_curve * 0.12))
 
     phase = np.cumsum((2.0 * math.pi * freq_curve) / sample_rate)
     body = oscillator_bank(phase, flow_curve, depth_curve, variant.audio, variant.visual)
     bed = texture_bed(sample_times, phase, freq_curve, flow_curve, depth_curve, variant.audio, variant.visual)
     sub = np.sin(phase * 0.5) * variant.audio.sub_mix
-    shimmer = np.sin(phase * (2.0 + depth_curve * (2.2 + variant.visual.flow_gain))) * (variant.audio.shimmer_mix * (0.16 + flow_curve))
-    ring = body * np.sin(phase * (1.15 + depth_curve * (1.0 + variant.audio.fm_ratio * 0.35))) * variant.audio.ring_mix
-    noise = rng.standard_normal(total_samples) * variant.audio.noise_mix * (0.08 + flow_curve * 0.28)
+    shimmer = np.sin(phase * (2.0 + depth_curve * (2.2 + variant.visual.flow_gain) + (lift_curve * 0.8))) * (variant.audio.shimmer_mix * (0.12 + flow_curve + (lift_curve * 0.22)))
+    ring = body * np.sin(phase * (1.15 + depth_curve * (1.0 + variant.audio.fm_ratio * 0.35) + (spread_curve * 0.6))) * (variant.audio.ring_mix * (0.28 + spread_curve * 0.72))
+    pose_reson = np.sin(phase * (1.0 + (spread_curve * 0.4) + (stride_curve * 0.24))) * (0.04 + energy_curve * 0.18)
+    noise = rng.standard_normal(total_samples) * variant.audio.noise_mix * (0.04 + (gesture_curve * 0.24) + ((1.0 - symmetry_curve) * 0.18))
 
-    mono = (body + bed + sub + shimmer + ring + noise) * amp_curve
-    mono = apply_tremolo(mono, sample_times, variant.audio.tremolo_rate * (0.85 + variant.visual.flow_gain * 0.2), 0.08 + variant.visual.edge_mix * 0.22)
+    mono = (body + bed + sub + shimmer + ring + pose_reson + noise) * amp_curve
+    mono = apply_tremolo(mono, sample_times, variant.audio.tremolo_rate * (0.75 + variant.visual.flow_gain * 0.2 + gesture_curve.mean() * 0.4), 0.08 + variant.visual.edge_mix * 0.14 + spread_curve.mean() * 0.16)
     mono = apply_one_pole_filter(mono, max(variant.audio.highpass_hz, 24.0), sample_rate, "highpass")
     mono = apply_one_pole_filter(
         mono,
-        min(variant.audio.lowpass_hz * (0.86 + depth_curve * 0.28).mean(), sample_rate * 0.45),
+        min(variant.audio.lowpass_hz * (0.84 + depth_curve.mean() * 0.2 + lift_curve.mean() * 0.16 + spread_curve.mean() * 0.12), sample_rate * 0.45),
         sample_rate,
         "lowpass",
     )

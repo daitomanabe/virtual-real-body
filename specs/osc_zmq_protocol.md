@@ -28,7 +28,7 @@
 | mp.pose | landmarks_norm(33,4), landmarks_world(33,3), velocity, speed_norm, energy, com | 60 |
 | depth.map | depth_f16(ndarray), mean, com_depth, range | 10 |
 | particle.state | spawn_points, attractors, emitters, field(ndarray) | 30 |
-| event | events[str], pose_speed, flow_energy, com | 60 |
+| event | events[str], pose_speed, flow_energy, com, pose{lift,spread,twist,gesture,stride,symmetry,height,lean,energy} | 60 |
 | meta.fps | fps{analyzer:hz} | 0.1 |
 
 ## ndarray Serialization
@@ -67,6 +67,7 @@ SuperCollider:
 
 ```text
 /synth/body               [freq, v, amp, v, cutoff, v, pan, v]
+/synth/pose               [lift, v, spread, v, twist, v, gesture, v, stride, v, symmetry, v, height, v, lean, v, energy, v]
 /fx/reverb/mix            [v]
 /fx/reverb/room           [v]
 /fx/delay/time            [v]
