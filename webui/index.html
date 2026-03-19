@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VRB Control Surface</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230d1117'/%3E%3Cpath d='M15 46L26 18h5l11 28h-6l-2.2-6.1H23.2L21 46zm9.7-11h7.6L28.5 24.4z' fill='%2379f0c0'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+    <script defer src="/app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <section class="hero-panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Virtual Real Body</p>
+          <h1>Control Surface</h1>
+          <p class="summary">
+            Sculpt the SuperCollider engine in real time. Body voice, trigger families,
+            spectral effects, and manual event fires all stay inside one fixed workspace.
+          </p>
+        </div>
+        <div class="hero-status">
+          <div class="status-card">
+            <span class="status-label">Server</span>
+            <span class="status-value" id="server-status">Connecting</span>
+          </div>
+          <div class="status-card">
+            <span class="status-label">Detected</span>
+            <button class="toggle-pill" id="detected-toggle" type="button">ON</button>
+          </div>
+          <div class="status-card wide">
+            <span class="status-label">Preset Lane</span>
+            <div class="preset-grid" id="preset-grid"></div>
+          </div>
+          <div class="status-card wide">
+            <span class="status-label">Macro Actions</span>
+            <div class="action-grid" id="action-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <div class="viewport-panel">
+          <div class="panel-header">
+            <h2>Performance Bus</h2>
+            <button class="secondary-button" id="refresh-state" type="button">Resync</button>
+          </div>
+          <div class="meter-cluster">
+            <div class="meter-card">
+              <label>Frequency</label>
+              <div class="meter-value" id="freq-readout">220.0 Hz</div>
+            </div>
+            <div class="meter-card">
+              <label>Amplitude</label>
+              <div class="meter-value" id="amp-readout">0.34</div>
+            </div>
+            <div class="meter-card">
+              <label>Cutoff</label>
+              <div class="meter-value" id="cutoff-readout">1600 Hz</div>
+            </div>
+            <div class="meter-card">
+              <label>Pan</label>
+              <div class="meter-value" id="pan-readout">0.00</div>
+            </div>
+          </div>
+
+          <div class="trigger-wall" id="trigger-wall"></div>
+
+          <div class="state-panel">
+            <div class="panel-header">
+              <h2>Current State</h2>
+            </div>
+            <pre id="state-dump"></pre>
+          </div>
+        </div>
+
+        <div class="control-panel">
+          <div class="control-scroll">
+            <section class="control-section" id="body-core-section">
+              <div class="panel-header">
+                <h2>Body Core</h2>
+              </div>
+              <div class="control-grid" id="body-core-grid"></div>
+            </section>
+
+            <section class="control-section" id="body-voice-section">
+              <div class="panel-header">
+                <h2>Body Voice</h2>
+              </div>
+              <div class="control-grid" id="body-voice-grid"></div>
+            </section>
+
+            <section class="control-section" id="fx-section">
+              <div class="panel-header">
+                <h2>FX Rack</h2>
+              </div>
+              <div class="fx-column" id="fx-column"></div>
+            </section>
+
+            <section class="control-section" id="trigger-voice-section">
+              <div class="panel-header">
+                <h2>Trigger Voices</h2>
+              </div>
+              <div class="voice-column" id="trigger-voice-column"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
