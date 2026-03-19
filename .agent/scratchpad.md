@@ -410,3 +410,14 @@
 
 ### Next Hat Focus
 - Integrator should resume end-to-end verification from `sc.built`, treating SuperCollider runtime execution as an environment dependency rather than a source-level blocker.
+
+## Iteration #23 — Python Builder
+
+### review.python Runtime Fix
+- Replaced the deferred `SystemExit` stub in `python/main.py` with a real runtime entrypoint that registers the default analyzer set, connects the ZMQ publisher, and runs either a camera loop or a bounded synthetic frame loop.
+- Added `--frame-limit` and `--synthetic-input` so the non-dry engine path can be exercised without a live camera during integration checks, while the default path still targets camera capture through OpenCV.
+- Re-ran the required import gate plus `python3 main.py --dry-run` and `python3 main.py --synthetic-input --frame-limit 2`; all succeeded in this environment.
+- Live camera verification remains dependent on installing `opencv-python` here, but the application no longer exits early before runtime startup.
+
+### Next Hat Focus
+- Swift Builder can resume from `python.built`; the Python runtime boundary now exposes a real analysis loop instead of an intentional abort.
