@@ -25,3 +25,5 @@
 [2026-03-19T08:11:41Z] iteration #10 | SC Builder | shader.built | done | 実装=supercollider/vrb_receiver.scd を新規作成しSynthDef/OSCdef/FXバス/cleanupを追加; 検証=python3 import gate成功, sclang未導入のためSC実行検証は未実施
 [2026-03-19T08:12:30Z] iteration #11 | Integrator | sc.built | start | reading scratchpad/iteration log, starting protocol/build/integration verification
 [2026-03-19T08:15:35Z] iteration #11 | Integrator | sc.built | issues | Python import gate failed on missing deserialise export; also noted Swift TCP-vs-ZMQ framing mismatch and SC symbol-vs-string OSC named-pair mismatch for follow-up
+[2026-03-19T08:13:58Z] event=review.python
+[2026-03-19T08:14:52Z] iteration #12 | Python Builder | review.python | done | 実装ファイル=python/transport/zmq_publisher.py, python/transport/__init__.py; 検証=deserialise import OK, python3 import gate成功

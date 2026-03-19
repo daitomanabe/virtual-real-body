@@ -40,7 +40,7 @@ class ZMQPublisher:
             enriched["analyzer"] = analyzer_name
         if msgpack is None:
             return repr(enriched).encode("utf-8")
-        return msgpack.packb(self._serialize(enriched), use_bin_type=True)
+        return pack_payload(enriched)
 
     def _serialize(self, value: Any) -> Any:
         if isinstance(value, dict):
@@ -62,3 +62,27 @@ class ZMQPublisher:
         if self._socket is not None:
             self._socket.close(linger=0)
             self._socket = None
+
+
+def serialise(value: Any) -> Any:
+    return ZMQPublisher("")._serialize(value)
+
+
+def serialize(value: Any) -> Any:
+    return serialise(value)
+
+
+def pack_payload(payload: Any) -> bytes:
+    if msgpack is None:
+        return repr(payload).encode("utf-8")
+    return msgpack.packb(serialise(payload), use_bin_type=True)
+
+
+def deserialise(payload: bytes) -> Any:
+    if msgpack is None:
+        raise RuntimeError("msgpack is required to deserialise ZMQ payloads.")
+    return msgpack.unpackb(payload, raw=False)
+
+
+def deserialize(payload: bytes) -> Any:
+    return deserialise(payload)

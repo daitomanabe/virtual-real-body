@@ -255,3 +255,28 @@
 
 ### Decision
 - Emit `review.python` first because the explicit integrator import gate is failing and blocks a valid `integration.done` handoff before later runtime transport mismatches can be re-tested.
+
+## Iteration #12 — Python Builder
+
+### Review Fix
+- Restored transport compatibility helpers in `python/transport/zmq_publisher.py` by exporting `deserialise`/`deserialize` and `serialise`/`serialize` alongside the existing `ZMQPublisher` API.
+- Updated `python/transport/__init__.py` so downstream imports can resolve the helper names from either the module or package boundary.
+- Re-ran the required `python3` import gate and confirmed both `from transport.zmq_publisher import ZMQPublisher, deserialise` and the full module import suite now succeed.
+
+## Phase 1: Python Analysis Engine
+- [x] `python/config.py` — 全パラメータ（ZMQ/OSC ports, YOLO settings, SC mapping）
+- [x] `python/core/analyzer_base.py` — 抽象基底クラス
+- [x] `python/core/engine.py` — AnalysisEngine（スレッド管理、meta-analyzerフック）
+- [x] `python/transport/zmq_publisher.py` — ZMQ PUB + MessagePack
+- [x] `python/transport/osc_broadcaster.py` — OSC UDP → port 9000 + 57120
+- [x] `python/analyzers/yolo_analyzer.py` — YOLODetect/Pose/Seg（MPS backend contract scaffold）
+- [x] `python/analyzers/optical_flow_analyzer.py` — Farneback + Lucas-Kanade payload scaffold
+- [x] `python/analyzers/mediapipe_analyzer.py` — 33点骨格 payload scaffold
+- [x] `python/analyzers/depth_analyzer.py` — Depth payload scaffold
+- [x] `python/analyzers/event_analyzer.py` — 離散イベント検出 → SC `/trigger/*`
+- [x] `python/analyzers/particle_analyzer.py` — フロー → パーティクル spawn データ
+- [x] `python/main.py` — エントリポイント（CLI args）
+- [x] `python/requirements.txt`
+
+## Next Hat Focus
+- Integrator can rerun the Python import gate without the previous `deserialise` ImportError and continue on the remaining Swift/SC integration mismatches separately.
