@@ -215,6 +215,21 @@
 - The checked-out Lygia tree does not contain `sdf/segmentSDF.msl`; used `sdf/lineSDF.msl` as the available segment-distance equivalent.
 - `xcrun metal` could not run in this environment because the Metal CLI utility is unavailable, so verification used `swift build` plus the required Python import gate instead.
 
+## Iteration #10 — SC Builder
+
+### Phase 3 Completion
+- Created `supercollider/vrb_receiver.scd` with the requested 3-section structure: boot block, SynthDef/OSCdef registration block, and cleanup block.
+- Implemented `\vrb_body`, `\vrb_onset`, `\vrb_impact`, `\vrb_enter`, `\vrb_exit`, `\vrb_flow_burst`, `\vrb_reverb`, and `\vrb_delay` with `gate=1`, `out=0`, `doneAction: 2`, stereo output, and final `.tanh` soft clipping.
+- Added named-pair OSC parsing for `/synth/body`, `/fx/reverb/*`, `/fx/delay/*`, `/trigger/*`, and `/vrb/meta/detected`, including body amp gating on person enter/exit and detection state.
+- Routed all sound generators into `~fxBus`, then chained delay and reverb through a dedicated intermediate bus to avoid `ReplaceOut` conflicts.
+
+### Verification
+- `cd python && python3 -c 'import ...'` still passes after the SC changes, satisfying the required import gate before handoff.
+- `sclang` is not installed in this environment, so SuperCollider syntax/runtime verification could not be executed locally; this was recorded in `.agent/errors.log` and as a fix memory.
+
+### Next Hat Focus
+- Integrator should verify Python OSC output against `supercollider/vrb_receiver.scd` once SuperCollider is available, especially named-pair payload parsing and the `/vrb/meta/detected` body mute/unmute behavior.
+
 ## Phase 2: Swift Renderer（Satin + LYGIA）
 - [x] `swift/Package.swift` — Satin submodule dependency
 - [x] `swift/Sources/VirtualRealBody/App/main.swift` + `AppDelegate.swift` — NSApp / fullscreen MTKView
