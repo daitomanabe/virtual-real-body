@@ -33,6 +33,42 @@ const BODY_VOICE_FIELDS = [
 ];
 
 const FX_FIELDS = {
+  harshNoise: [
+    { key: "enabled", label: "On", type: "toggle" },
+    { key: "level", label: "Level", min: 0, max: 1, step: 0.01, format: formatUnit },
+    { key: "tone", label: "Tone", min: 0, max: 1, step: 0.01, format: formatUnit },
+    { key: "hp", label: "HP", min: 120, max: 12000, step: 1, format: (value) => `${value.toFixed(0)} Hz` },
+    { key: "lp", label: "LP", min: 1200, max: 18000, step: 1, format: (value) => `${value.toFixed(0)} Hz` },
+    { key: "duck", label: "Duck", min: 0, max: 1, step: 0.01, format: formatUnit },
+  ],
+  highpass: [
+    { key: "enabled", label: "On", type: "toggle" },
+    { key: "freq", label: "Freq", min: 20, max: 12000, step: 1, format: (value) => `${value.toFixed(0)} Hz` },
+    { key: "resonance", label: "Resonance", min: 0.08, max: 0.95, step: 0.01, format: formatUnit },
+    { key: "mix", label: "Mix", min: 0, max: 1, step: 0.01, format: formatUnit },
+  ],
+  lowpass: [
+    { key: "enabled", label: "On", type: "toggle" },
+    { key: "freq", label: "Freq", min: 120, max: 18000, step: 1, format: (value) => `${value.toFixed(0)} Hz` },
+    { key: "resonance", label: "Resonance", min: 0.08, max: 0.95, step: 0.01, format: formatUnit },
+    { key: "mix", label: "Mix", min: 0, max: 1, step: 0.01, format: formatUnit },
+  ],
+  distortion: [
+    { key: "enabled", label: "On", type: "toggle" },
+    { key: "drive", label: "Drive", min: 0, max: 1, step: 0.01, format: formatUnit },
+    { key: "mix", label: "Mix", min: 0, max: 1, step: 0.01, format: formatUnit },
+    { key: "fold", label: "Fold", min: 0, max: 1, step: 0.01, format: formatUnit },
+    { key: "bias", label: "Bias", min: -1, max: 1, step: 0.01, format: formatUnit },
+    { key: "tone", label: "Tone", min: 0, max: 1, step: 0.01, format: formatUnit },
+  ],
+  glitch: [
+    { key: "enabled", label: "On", type: "toggle" },
+    { key: "mix", label: "Mix", min: 0, max: 1, step: 0.01, format: formatUnit },
+    { key: "rate", label: "Rate", min: 0.25, max: 40, step: 0.01, format: (value) => `${value.toFixed(2)} Hz` },
+    { key: "depth", label: "Depth", min: 0, max: 1, step: 0.01, format: formatUnit },
+    { key: "crush", label: "Crush", min: 0, max: 1, step: 0.01, format: formatUnit },
+    { key: "gate", label: "Gate", min: 0, max: 1, step: 0.01, format: formatUnit },
+  ],
   delay: [
     { key: "time", label: "Time", min: 0.01, max: 0.95, step: 0.01, format: (value) => `${value.toFixed(2)} s` },
     { key: "feedback", label: "Feedback", min: 0.01, max: 0.99, step: 0.01, format: formatUnit },
@@ -75,8 +111,23 @@ const ACTION_LABEL = {
   dry: "Dry Rack",
   wide: "Wide",
   storm: "Storm",
+  brutalize: "Brutalize",
+  "filter-choke": "Filter Choke",
+  "glitch-wall": "Glitch Wall",
   "random-soft": "Random Soft",
   "random-bold": "Random Bold",
+};
+
+const FX_SECTION_LABEL = {
+  harshNoise: "Harsh Noise",
+  highpass: "High-Pass",
+  lowpass: "Low-Pass",
+  distortion: "Distortion",
+  glitch: "Glitch",
+  delay: "Delay",
+  chorus: "Chorus",
+  reverb: "Reverb",
+  master: "Master",
 };
 
 const state = {
@@ -131,6 +182,10 @@ async function sendPatch(patch) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),
   });
+  if (!response.ok) {
+    setStatus("Patch Error");
+    return;
+  }
   const payload = await response.json();
   state.data = payload.state;
   setStatus("Live");
@@ -269,7 +324,7 @@ function renderState() {
     const card = document.createElement("div");
     card.className = "fx-card";
     const heading = document.createElement("h3");
-    heading.textContent = section;
+    heading.textContent = FX_SECTION_LABEL[section] || section;
     card.appendChild(heading);
     const grid = document.createElement("div");
     grid.className = "control-grid tight";
@@ -317,10 +372,27 @@ function renderFieldGrid(container, values, fields, onChange) {
     wrap.className = "control-field";
     const head = document.createElement("div");
     head.className = "control-head";
-    head.innerHTML = `<span>${field.label}</span><span>${field.format ? field.format(Number(values[field.key])) : values[field.key]}</span>`;
+    head.innerHTML = `<span>${field.label}</span><span>${formatFieldValue(field, values[field.key])}</span>`;
     wrap.appendChild(head);
 
-    if (field.type === "select") {
+    if (field.type === "toggle") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "toggle-switch";
+      const syncToggle = (active) => {
+        button.dataset.active = active ? "true" : "false";
+        button.textContent = active ? "ON" : "OFF";
+        head.lastElementChild.textContent = active ? "ON" : "OFF";
+      };
+      syncToggle(Boolean(values[field.key]));
+      button.addEventListener("click", () => {
+        const nextValue = !Boolean(values[field.key]);
+        values[field.key] = nextValue;
+        syncToggle(nextValue);
+        onChange(field.key, nextValue);
+      });
+      wrap.appendChild(button);
+    } else if (field.type === "select") {
       const select = document.createElement("select");
       field.options.forEach(([value, label]) => {
         const option = document.createElement("option");
@@ -347,6 +419,16 @@ function renderFieldGrid(container, values, fields, onChange) {
 
     container.appendChild(wrap);
   });
+}
+
+function formatFieldValue(field, value) {
+  if (field.type === "toggle") {
+    return value ? "ON" : "OFF";
+  }
+  if (field.format) {
+    return field.format(Number(value));
+  }
+  return value;
 }
 
 loadState().catch((error) => {

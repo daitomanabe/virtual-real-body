@@ -54,7 +54,7 @@ Those passes are combined in `Compositor.metal` into the final side-by-side outp
 
 - Script: `supercollider/vrb_receiver.scd`
 - Boot config sets `numInputBusChannels = 0` and `sampleRate = 44100`
-- Registers persistent body, delay, chorus, reverb, and master synths plus trigger synths for motion onset, impact, enter, exit, and flow burst
+- Registers persistent body, harsh-noise / filter / distortion / glitch processors, delay, chorus, reverb, and master synths plus trigger synths for motion onset, impact, enter, exit, and flow burst
 - Accepts both analysis OSC from Python and manual control OSC from the WebUI bridge
 
 The OSC parser accepts named-pair payloads from Python, including both `String` and `Symbol` keys.
@@ -65,7 +65,7 @@ The OSC parser accepts named-pair payloads from Python, including both `String` 
 - Static UI: `webui/index.html`, `webui/app.js`, `webui/styles.css`
 - HTTP default: `127.0.0.1:8080`
 
-The control surface mirrors the SuperCollider runtime state, exposes six presets, seven macro actions, direct trigger fire buttons, and continuous sliders for body, FX, and trigger parameters.
+The control surface mirrors the SuperCollider runtime state, exposes six presets, ten macro actions, direct trigger fire buttons, and toggle / slider controls for body, aggressive FX racks, and trigger parameters.
 
 ## Setup
 
@@ -188,6 +188,11 @@ If `3000` is already taken, start `server.py` on another free port, then open `h
 | `/fx/delay/time` | SuperCollider | `[seconds]` |
 | `/fx/delay/feedback` | SuperCollider | `[feedback]` |
 | `/ui/body` | SuperCollider | named pairs `mode/texture/noiseMix/subMix/motion/resonance` |
+| `/ui/fx/harshNoise` | SuperCollider | named pairs `enabled/level/tone/hp/lp/duck` |
+| `/ui/fx/highpass` | SuperCollider | named pairs `enabled/freq/resonance/mix` |
+| `/ui/fx/lowpass` | SuperCollider | named pairs `enabled/freq/resonance/mix` |
+| `/ui/fx/distortion` | SuperCollider | named pairs `enabled/drive/mix/fold/bias/tone` |
+| `/ui/fx/glitch` | SuperCollider | named pairs `enabled/mix/rate/depth/crush/gate` |
 | `/ui/fx/delay` | SuperCollider | named pairs `time/feedback/mix/tone` |
 | `/ui/fx/chorus` | SuperCollider | named pairs `mix/rate/depth` |
 | `/ui/fx/reverb` | SuperCollider | named pairs `mix/room/damp/tone` |

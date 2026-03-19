@@ -266,6 +266,88 @@ s.boot;
 			ReplaceOut.ar(out, LeakDC.ar((sig * env)).tanh);
 		}).add;
 
+		SynthDef(\vrb_aggression, {
+			|out=0, gate=1, inbus=0,
+			harshOn=0, harshLevel=0.0, harshTone=0.62, harshHp=1800, harshLp=9800, harshDuck=0.22,
+			hpOn=0, hpFreq=120, hpRq=0.4, hpMix=1.0,
+			lpOn=0, lpFreq=9200, lpRq=0.45, lpMix=1.0,
+			distOn=0, distDrive=0.0, distMix=0.0, distFold=0.0, distBias=0.0, distTone=0.68,
+			glitchOn=0, glitchMix=0.0, glitchRate=8.0, glitchDepth=0.0, glitchCrush=0.0, glitchGate=0.0|
+			var env, input, sig;
+			var harshOnCtl, harshLevelCtl, harshToneCtl, harshHpCtl, harshLpCtl, harshDuckCtl;
+			var hpOnCtl, hpFreqCtl, hpRqCtl, hpMixCtl;
+			var lpOnCtl, lpFreqCtl, lpRqCtl, lpMixCtl;
+			var distOnCtl, distDriveCtl, distMixCtl, distFoldCtl, distBiasCtl, distToneCtl;
+			var glitchOnCtl, glitchMixCtl, glitchRateCtl, glitchDepthCtl, glitchCrushCtl, glitchGateCtl;
+			var follower, harsh, harshL, harshR, hpWet, lpWet, foldSig, distWet, glitchTrig, held, crushSteps, gateMask, glitchWet;
+			harshOnCtl = Lag.kr(harshOn.clip(0, 1), 0.08);
+			harshLevelCtl = Lag.kr(harshLevel.clip(0, 1), 0.12);
+			harshToneCtl = Lag.kr(harshTone.clip(0, 1), 0.12);
+			harshHpCtl = Lag.kr(harshHp.clip(120, 12000), 0.12);
+			harshLpCtl = Lag.kr(harshLp.clip(1200, 18000), 0.12);
+			harshDuckCtl = Lag.kr(harshDuck.clip(0, 1), 0.12);
+			hpOnCtl = Lag.kr(hpOn.clip(0, 1), 0.08);
+			hpFreqCtl = Lag.kr(hpFreq.clip(20, 12000), 0.12);
+			hpRqCtl = Lag.kr(hpRq.clip(0.08, 0.95), 0.12);
+			hpMixCtl = Lag.kr(hpMix.clip(0, 1), 0.12);
+			lpOnCtl = Lag.kr(lpOn.clip(0, 1), 0.08);
+			lpFreqCtl = Lag.kr(lpFreq.clip(120, 18000), 0.12);
+			lpRqCtl = Lag.kr(lpRq.clip(0.08, 0.95), 0.12);
+			lpMixCtl = Lag.kr(lpMix.clip(0, 1), 0.12);
+			distOnCtl = Lag.kr(distOn.clip(0, 1), 0.08);
+			distDriveCtl = Lag.kr(distDrive.clip(0, 1), 0.1);
+			distMixCtl = Lag.kr(distMix.clip(0, 1), 0.1);
+			distFoldCtl = Lag.kr(distFold.clip(0, 1), 0.1);
+			distBiasCtl = Lag.kr(distBias.clip(-1, 1), 0.1);
+			distToneCtl = Lag.kr(distTone.clip(0, 1), 0.1);
+			glitchOnCtl = Lag.kr(glitchOn.clip(0, 1), 0.08);
+			glitchMixCtl = Lag.kr(glitchMix.clip(0, 1), 0.08);
+			glitchRateCtl = Lag.kr(glitchRate.clip(0.25, 40.0), 0.1);
+			glitchDepthCtl = Lag.kr(glitchDepth.clip(0, 1), 0.1);
+			glitchCrushCtl = Lag.kr(glitchCrush.clip(0, 1), 0.1);
+			glitchGateCtl = Lag.kr(glitchGate.clip(0, 1), 0.1);
+			env = EnvGen.kr(Env.asr(0.01, 1.0, 0.2), gate: gate, doneAction: 2);
+			input = In.ar(inbus, 2);
+			follower = Amplitude.kr(Mix(input), 0.01, 0.12).lag(0.08);
+
+			harsh = WhiteNoise.ar(0.55) + GrayNoise.ar(0.25);
+			harsh = HPF.ar(harsh, harshHpCtl);
+			harsh = BPF.ar(harsh, harshToneCtl.linexp(0.0, 1.0, 2200, 8200), 0.16) + (harsh * 0.35);
+			harsh = LPF.ar(harsh, harshLpCtl);
+			harsh = harsh * harshLevelCtl * harshOnCtl * (0.3 + (follower * (1.6 - (harshDuckCtl * 1.1))));
+			harshL = DelayC.ar(harsh, 0.05, 0.003);
+			harshR = DelayC.ar(harsh, 0.05, 0.011);
+			sig = input + [harshL, harshR];
+
+			hpWet = RHPF.ar(sig, hpFreqCtl, hpRqCtl);
+			sig = XFade2.ar(sig, hpWet, (hpOnCtl * hpMixCtl).linlin(0, 1, -1, 1));
+
+			lpWet = RLPF.ar(sig, lpFreqCtl, lpRqCtl);
+			sig = XFade2.ar(sig, lpWet, (lpOnCtl * lpMixCtl).linlin(0, 1, -1, 1));
+
+			foldSig = Fold.ar(LeakDC.ar(sig + distBiasCtl), -1.0, 1.0);
+			distWet = ((sig * (1.0 + (distDriveCtl * 18.0))) + (foldSig * (0.3 + (distFoldCtl * 1.6)))).tanh;
+			distWet = HPF.ar(LPF.ar(distWet, distToneCtl.linexp(0.0, 1.0, 1200, 12000)), 38);
+			sig = XFade2.ar(sig, distWet, (distOnCtl * distMixCtl).linlin(0, 1, -1, 1));
+
+			glitchTrig = Impulse.ar(glitchRateCtl);
+			held = [Latch.ar(sig[0], glitchTrig), Latch.ar(sig[1], glitchTrig)];
+			crushSteps = glitchCrushCtl.linexp(0.0, 1.0, 256.0, 12.0);
+			glitchWet = (held * crushSteps).round / crushSteps;
+			glitchWet = LeakDC.ar(glitchWet + (HPF.ar(glitchWet, 1800) * glitchDepthCtl * 0.6));
+			gateMask = (1.0 - glitchGateCtl) + (
+				LFPulse.kr(
+					(glitchRateCtl * (0.5 + (glitchDepthCtl * 3.0))).clip(0.2, 40.0),
+					0,
+					(1.0 - (glitchGateCtl * 0.78)).clip(0.08, 0.98)
+				) * glitchGateCtl
+			);
+			glitchWet = glitchWet * gateMask;
+			sig = XFade2.ar(sig, glitchWet, (glitchOnCtl * glitchMixCtl).linlin(0, 1, -1, 1));
+
+			ReplaceOut.ar(out, LeakDC.ar(sig * env));
+		}).add;
+
 		SynthDef(\vrb_master, { |out=0, gate=1, inbus=0, drive=0.18, width=0.25, tremRate=0.0, tremDepth=0.0, output=0.9|
 			var env, input, mid, side, widthCtl, trem, sig, driveCtl;
 			widthCtl = width.clip(0, 1);
@@ -285,6 +367,7 @@ s.boot;
 		s.sync;
 
 		~fxBus = Bus.audio(s, 2);
+		~aggroBus = Bus.audio(s, 2);
 		~delayBus = Bus.audio(s, 2);
 		~chorusBus = Bus.audio(s, 2);
 		~verbBus = Bus.audio(s, 2);
@@ -314,6 +397,11 @@ s.boot;
 			flow: (mode: 0.0, color: 0.5)
 		);
 		~fxUi = (
+			harshNoise: (enabled: 0, level: 0.0, tone: 0.62, hp: 1800.0, lp: 9800.0, duck: 0.22),
+			highpass: (enabled: 0, freq: 120.0, resonance: 0.4, mix: 1.0),
+			lowpass: (enabled: 0, freq: 9200.0, resonance: 0.45, mix: 1.0),
+			distortion: (enabled: 0, drive: 0.0, mix: 0.0, fold: 0.0, bias: 0.0, tone: 0.68),
+			glitch: (enabled: 0, mix: 0.0, rate: 8.0, depth: 0.0, crush: 0.0, gate: 0.0),
 			delay: (time: 0.2, feedback: 0.25, mix: 0.32, tone: 0.62),
 			chorus: (mix: 0.12, rate: 0.18, depth: 0.012),
 			reverb: (mix: 0.18, room: 0.55, damp: 0.45, tone: 0.6),
@@ -334,8 +422,39 @@ s.boot;
 			\resonance, ~bodyUi[\resonance]
 		]);
 
-		~delay = Synth.new(\vrb_delay, [
+		~aggro = Synth.new(\vrb_aggression, [
 			\inbus, ~fxBus.index,
+			\out, ~aggroBus.index,
+			\harshOn, ~fxUi[\harshNoise][\enabled],
+			\harshLevel, ~fxUi[\harshNoise][\level],
+			\harshTone, ~fxUi[\harshNoise][\tone],
+			\harshHp, ~fxUi[\harshNoise][\hp],
+			\harshLp, ~fxUi[\harshNoise][\lp],
+			\harshDuck, ~fxUi[\harshNoise][\duck],
+			\hpOn, ~fxUi[\highpass][\enabled],
+			\hpFreq, ~fxUi[\highpass][\freq],
+			\hpRq, ~fxUi[\highpass][\resonance],
+			\hpMix, ~fxUi[\highpass][\mix],
+			\lpOn, ~fxUi[\lowpass][\enabled],
+			\lpFreq, ~fxUi[\lowpass][\freq],
+			\lpRq, ~fxUi[\lowpass][\resonance],
+			\lpMix, ~fxUi[\lowpass][\mix],
+			\distOn, ~fxUi[\distortion][\enabled],
+			\distDrive, ~fxUi[\distortion][\drive],
+			\distMix, ~fxUi[\distortion][\mix],
+			\distFold, ~fxUi[\distortion][\fold],
+			\distBias, ~fxUi[\distortion][\bias],
+			\distTone, ~fxUi[\distortion][\tone],
+			\glitchOn, ~fxUi[\glitch][\enabled],
+			\glitchMix, ~fxUi[\glitch][\mix],
+			\glitchRate, ~fxUi[\glitch][\rate],
+			\glitchDepth, ~fxUi[\glitch][\depth],
+			\glitchCrush, ~fxUi[\glitch][\crush],
+			\glitchGate, ~fxUi[\glitch][\gate]
+		], s, \addToTail);
+
+		~delay = Synth.new(\vrb_delay, [
+			\inbus, ~aggroBus.index,
 			\out, ~delayBus.index,
 			\delaytime, ~fxUi[\delay][\time],
 			\feedback, ~fxUi[\delay][\feedback],
@@ -380,6 +499,36 @@ s.boot;
 		};
 
 		refreshFxState = {
+			if(~aggro.notNil) {
+				~aggro.set(
+					\harshOn, ~fxUi[\harshNoise][\enabled],
+					\harshLevel, ~fxUi[\harshNoise][\level],
+					\harshTone, ~fxUi[\harshNoise][\tone],
+					\harshHp, ~fxUi[\harshNoise][\hp],
+					\harshLp, ~fxUi[\harshNoise][\lp],
+					\harshDuck, ~fxUi[\harshNoise][\duck],
+					\hpOn, ~fxUi[\highpass][\enabled],
+					\hpFreq, ~fxUi[\highpass][\freq],
+					\hpRq, ~fxUi[\highpass][\resonance],
+					\hpMix, ~fxUi[\highpass][\mix],
+					\lpOn, ~fxUi[\lowpass][\enabled],
+					\lpFreq, ~fxUi[\lowpass][\freq],
+					\lpRq, ~fxUi[\lowpass][\resonance],
+					\lpMix, ~fxUi[\lowpass][\mix],
+					\distOn, ~fxUi[\distortion][\enabled],
+					\distDrive, ~fxUi[\distortion][\drive],
+					\distMix, ~fxUi[\distortion][\mix],
+					\distFold, ~fxUi[\distortion][\fold],
+					\distBias, ~fxUi[\distortion][\bias],
+					\distTone, ~fxUi[\distortion][\tone],
+					\glitchOn, ~fxUi[\glitch][\enabled],
+					\glitchMix, ~fxUi[\glitch][\mix],
+					\glitchRate, ~fxUi[\glitch][\rate],
+					\glitchDepth, ~fxUi[\glitch][\depth],
+					\glitchCrush, ~fxUi[\glitch][\crush],
+					\glitchGate, ~fxUi[\glitch][\gate]
+				);
+			};
 			if(~delay.notNil) {
 				~delay.set(
 					\delaytime, ~fxUi[\delay][\time],
@@ -530,6 +679,88 @@ s.boot;
 			refreshFxState.();
 		}, '/ui/fx/delay', recvPort: NetAddr.langPort);
 
+		OSCdef(\uiHarshNoise, { |msg|
+			var values, enabled, level, tone, hp, lp, duck;
+			values = makeNamedValueParser.(msg);
+			enabled = values.at(\enabled);
+			level = values.at(\level);
+			tone = values.at(\tone);
+			hp = values.at(\hp);
+			lp = values.at(\lp);
+			duck = values.at(\duck);
+			if(enabled.notNil) { ~fxUi[\harshNoise][\enabled] = enabled.asFloat.clip(0, 1) };
+			if(level.notNil) { ~fxUi[\harshNoise][\level] = level.asFloat.clip(0, 1) };
+			if(tone.notNil) { ~fxUi[\harshNoise][\tone] = tone.asFloat.clip(0, 1) };
+			if(hp.notNil) { ~fxUi[\harshNoise][\hp] = hp.asFloat.clip(120, 12000) };
+			if(lp.notNil) { ~fxUi[\harshNoise][\lp] = lp.asFloat.clip(1200, 18000) };
+			if(duck.notNil) { ~fxUi[\harshNoise][\duck] = duck.asFloat.clip(0, 1) };
+			refreshFxState.();
+		}, '/ui/fx/harshNoise', recvPort: NetAddr.langPort);
+
+		OSCdef(\uiHighpass, { |msg|
+			var values, enabled, freq, resonance, mix;
+			values = makeNamedValueParser.(msg);
+			enabled = values.at(\enabled);
+			freq = values.at(\freq);
+			resonance = values.at(\resonance);
+			mix = values.at(\mix);
+			if(enabled.notNil) { ~fxUi[\highpass][\enabled] = enabled.asFloat.clip(0, 1) };
+			if(freq.notNil) { ~fxUi[\highpass][\freq] = freq.asFloat.clip(20, 12000) };
+			if(resonance.notNil) { ~fxUi[\highpass][\resonance] = resonance.asFloat.clip(0.08, 0.95) };
+			if(mix.notNil) { ~fxUi[\highpass][\mix] = mix.asFloat.clip(0, 1) };
+			refreshFxState.();
+		}, '/ui/fx/highpass', recvPort: NetAddr.langPort);
+
+		OSCdef(\uiLowpass, { |msg|
+			var values, enabled, freq, resonance, mix;
+			values = makeNamedValueParser.(msg);
+			enabled = values.at(\enabled);
+			freq = values.at(\freq);
+			resonance = values.at(\resonance);
+			mix = values.at(\mix);
+			if(enabled.notNil) { ~fxUi[\lowpass][\enabled] = enabled.asFloat.clip(0, 1) };
+			if(freq.notNil) { ~fxUi[\lowpass][\freq] = freq.asFloat.clip(120, 18000) };
+			if(resonance.notNil) { ~fxUi[\lowpass][\resonance] = resonance.asFloat.clip(0.08, 0.95) };
+			if(mix.notNil) { ~fxUi[\lowpass][\mix] = mix.asFloat.clip(0, 1) };
+			refreshFxState.();
+		}, '/ui/fx/lowpass', recvPort: NetAddr.langPort);
+
+		OSCdef(\uiDistortion, { |msg|
+			var values, enabled, drive, mix, fold, bias, tone;
+			values = makeNamedValueParser.(msg);
+			enabled = values.at(\enabled);
+			drive = values.at(\drive);
+			mix = values.at(\mix);
+			fold = values.at(\fold);
+			bias = values.at(\bias);
+			tone = values.at(\tone);
+			if(enabled.notNil) { ~fxUi[\distortion][\enabled] = enabled.asFloat.clip(0, 1) };
+			if(drive.notNil) { ~fxUi[\distortion][\drive] = drive.asFloat.clip(0, 1) };
+			if(mix.notNil) { ~fxUi[\distortion][\mix] = mix.asFloat.clip(0, 1) };
+			if(fold.notNil) { ~fxUi[\distortion][\fold] = fold.asFloat.clip(0, 1) };
+			if(bias.notNil) { ~fxUi[\distortion][\bias] = bias.asFloat.clip(-1, 1) };
+			if(tone.notNil) { ~fxUi[\distortion][\tone] = tone.asFloat.clip(0, 1) };
+			refreshFxState.();
+		}, '/ui/fx/distortion', recvPort: NetAddr.langPort);
+
+		OSCdef(\uiGlitch, { |msg|
+			var values, enabled, mix, rate, depth, crush, gate;
+			values = makeNamedValueParser.(msg);
+			enabled = values.at(\enabled);
+			mix = values.at(\mix);
+			rate = values.at(\rate);
+			depth = values.at(\depth);
+			crush = values.at(\crush);
+			gate = values.at(\gate);
+			if(enabled.notNil) { ~fxUi[\glitch][\enabled] = enabled.asFloat.clip(0, 1) };
+			if(mix.notNil) { ~fxUi[\glitch][\mix] = mix.asFloat.clip(0, 1) };
+			if(rate.notNil) { ~fxUi[\glitch][\rate] = rate.asFloat.clip(0.25, 40.0) };
+			if(depth.notNil) { ~fxUi[\glitch][\depth] = depth.asFloat.clip(0, 1) };
+			if(crush.notNil) { ~fxUi[\glitch][\crush] = crush.asFloat.clip(0, 1) };
+			if(gate.notNil) { ~fxUi[\glitch][\gate] = gate.asFloat.clip(0, 1) };
+			refreshFxState.();
+		}, '/ui/fx/glitch', recvPort: NetAddr.langPort);
+
 		OSCdef(\uiChorus, { |msg|
 			var values, mix, rate, depth;
 			values = makeNamedValueParser.(msg);
@@ -661,6 +892,11 @@ s.boot;
 			if(OSCdef(\reverbRoom).notNil) { OSCdef(\reverbRoom).free };
 			if(OSCdef(\delayTime).notNil) { OSCdef(\delayTime).free };
 			if(OSCdef(\delayFeedback).notNil) { OSCdef(\delayFeedback).free };
+			if(OSCdef(\uiHarshNoise).notNil) { OSCdef(\uiHarshNoise).free };
+			if(OSCdef(\uiHighpass).notNil) { OSCdef(\uiHighpass).free };
+			if(OSCdef(\uiLowpass).notNil) { OSCdef(\uiLowpass).free };
+			if(OSCdef(\uiDistortion).notNil) { OSCdef(\uiDistortion).free };
+			if(OSCdef(\uiGlitch).notNil) { OSCdef(\uiGlitch).free };
 			if(OSCdef(\uiDelay).notNil) { OSCdef(\uiDelay).free };
 			if(OSCdef(\uiChorus).notNil) { OSCdef(\uiChorus).free };
 			if(OSCdef(\uiReverb).notNil) { OSCdef(\uiReverb).free };
@@ -677,6 +913,7 @@ s.boot;
 			if(OSCdef(\flowBurst).notNil) { OSCdef(\flowBurst).free };
 			if(OSCdef(\detected).notNil) { OSCdef(\detected).free };
 			if(~body.notNil) { ~body.set(\gate, 0) };
+			if(~aggro.notNil) { ~aggro.set(\gate, 0) };
 			if(~delay.notNil) { ~delay.set(\gate, 0) };
 			if(~chorus.notNil) { ~chorus.set(\gate, 0) };
 			if(~reverb.notNil) { ~reverb.set(\gate, 0) };
@@ -685,6 +922,7 @@ s.boot;
 			if(~verbBus.notNil) { ~verbBus.free };
 			if(~chorusBus.notNil) { ~chorusBus.free };
 			if(~delayBus.notNil) { ~delayBus.free };
+			if(~aggroBus.notNil) { ~aggroBus.free };
 			if(~fxBus.notNil) { ~fxBus.free };
 		};
 

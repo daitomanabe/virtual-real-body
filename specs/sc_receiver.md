@@ -4,7 +4,7 @@
 
 - 受信ポート: `57120`
 - 常時音用 body synth と、離散イベント用 trigger synth を分離する
-- FX は専用バスで `delay -> chorus -> reverb -> master` の順に後段処理する
+- FX は専用バスで `aggression -> delay -> chorus -> reverb -> master` の順に後段処理する
 - `sclang supercollider/vrb_receiver.scd` でファイル全体を直接実行できる構造にする
 - manual performance 用に WebUI bridge からの `/ui/*` OSC を受ける
 
@@ -26,6 +26,11 @@ s.options.sampleRate = 44100;
 /fx/delay/time          [v]
 /fx/delay/feedback      [v]
 /ui/body                [mode, v, texture, v, noiseMix, v, subMix, v, motion, v, resonance, v]
+/ui/fx/harshNoise       [enabled, v, level, v, tone, v, hp, v, lp, v, duck, v]
+/ui/fx/highpass         [enabled, v, freq, v, resonance, v, mix, v]
+/ui/fx/lowpass          [enabled, v, freq, v, resonance, v, mix, v]
+/ui/fx/distortion       [enabled, v, drive, v, mix, v, fold, v, bias, v, tone, v]
+/ui/fx/glitch           [enabled, v, mix, v, rate, v, depth, v, crush, v, gate, v]
 /ui/fx/delay            [time, v, feedback, v, mix, v, tone, v]
 /ui/fx/chorus           [mix, v, rate, v, depth, v]
 /ui/fx/reverb           [mix, v, room, v, damp, v, tone, v]
@@ -58,6 +63,7 @@ s.options.sampleRate = 44100;
 - `\vrb_exit` 人物消失の下降音。falling pulse/body + dusty tail
 - `\vrb_flow_burst` フロー急増のノイズバースト。band-pass noise cloud + resonant particles
 - 各 trigger synth は `mode` と `color` を持ち、音色ファミリーを切り替えられる
+- `\vrb_aggression` harsh noise、high-pass、low-pass、distortion、glitch をまとめて処理する前段 FX bus
 - `\vrb_delay` `CombC` ベースのディレイ
 - `\vrb_chorus` stereo delay modulation
 - `\vrb_reverb` `FreeVerb2` を使う

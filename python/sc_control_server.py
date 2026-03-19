@@ -36,6 +36,11 @@ DEFAULT_STATE: dict[str, object] = {
         },
     },
     "fx": {
+        "harshNoise": {"enabled": False, "level": 0.0, "tone": 0.62, "hp": 1800.0, "lp": 9800.0, "duck": 0.22},
+        "highpass": {"enabled": False, "freq": 120.0, "resonance": 0.4, "mix": 1.0},
+        "lowpass": {"enabled": False, "freq": 9200.0, "resonance": 0.45, "mix": 1.0},
+        "distortion": {"enabled": False, "drive": 0.0, "mix": 0.0, "fold": 0.0, "bias": 0.0, "tone": 0.68},
+        "glitch": {"enabled": False, "mix": 0.0, "rate": 8.0, "depth": 0.0, "crush": 0.0, "gate": 0.0},
         "delay": {"time": 0.22, "feedback": 0.28, "mix": 0.32, "tone": 0.62},
         "chorus": {"mix": 0.12, "rate": 0.18, "depth": 0.012},
         "reverb": {"mix": 0.18, "room": 0.55, "damp": 0.45, "tone": 0.6},
@@ -58,6 +63,7 @@ PRESETS: dict[str, dict[str, object]] = {
             "voice": {"mode": 2.0, "texture": 0.42, "noiseMix": 0.16, "subMix": 0.48, "motion": 0.24, "resonance": 0.28},
         },
         "fx": {
+            "lowpass": {"enabled": True, "freq": 11800.0, "resonance": 0.32, "mix": 0.32},
             "delay": {"time": 0.34, "feedback": 0.46, "mix": 0.38, "tone": 0.68},
             "chorus": {"mix": 0.26, "rate": 0.18, "depth": 0.019},
             "reverb": {"mix": 0.34, "room": 0.84, "damp": 0.32, "tone": 0.76},
@@ -77,6 +83,8 @@ PRESETS: dict[str, dict[str, object]] = {
             "voice": {"mode": 1.0, "texture": 0.68, "noiseMix": 0.12, "subMix": 0.72, "motion": 0.28, "resonance": 0.2},
         },
         "fx": {
+            "highpass": {"enabled": True, "freq": 260.0, "resonance": 0.22, "mix": 0.74},
+            "distortion": {"enabled": True, "drive": 0.58, "mix": 0.52, "fold": 0.34, "bias": 0.05, "tone": 0.56},
             "delay": {"time": 0.18, "feedback": 0.34, "mix": 0.24, "tone": 0.58},
             "chorus": {"mix": 0.08, "rate": 0.31, "depth": 0.01},
             "reverb": {"mix": 0.12, "room": 0.42, "damp": 0.52, "tone": 0.5},
@@ -96,6 +104,7 @@ PRESETS: dict[str, dict[str, object]] = {
             "voice": {"mode": 3.0, "texture": 0.52, "noiseMix": 0.3, "subMix": 0.3, "motion": 0.78, "resonance": 0.34},
         },
         "fx": {
+            "lowpass": {"enabled": True, "freq": 6800.0, "resonance": 0.36, "mix": 0.42},
             "delay": {"time": 0.42, "feedback": 0.51, "mix": 0.4, "tone": 0.76},
             "chorus": {"mix": 0.34, "rate": 0.22, "depth": 0.026},
             "reverb": {"mix": 0.38, "room": 0.92, "damp": 0.28, "tone": 0.84},
@@ -115,6 +124,7 @@ PRESETS: dict[str, dict[str, object]] = {
             "voice": {"mode": 2.0, "texture": 0.64, "noiseMix": 0.24, "subMix": 0.44, "motion": 0.48, "resonance": 0.38},
         },
         "fx": {
+            "distortion": {"enabled": True, "drive": 0.24, "mix": 0.18, "fold": 0.12, "bias": 0.0, "tone": 0.64},
             "delay": {"time": 0.28, "feedback": 0.36, "mix": 0.24, "tone": 0.58},
             "chorus": {"mix": 0.18, "rate": 0.12, "depth": 0.016},
             "reverb": {"mix": 0.29, "room": 0.76, "damp": 0.36, "tone": 0.7},
@@ -134,6 +144,8 @@ PRESETS: dict[str, dict[str, object]] = {
             "voice": {"mode": 1.0, "texture": 0.74, "noiseMix": 0.14, "subMix": 0.76, "motion": 0.18, "resonance": 0.18},
         },
         "fx": {
+            "highpass": {"enabled": True, "freq": 180.0, "resonance": 0.24, "mix": 0.38},
+            "distortion": {"enabled": True, "drive": 0.42, "mix": 0.34, "fold": 0.28, "bias": 0.03, "tone": 0.48},
             "delay": {"time": 0.16, "feedback": 0.24, "mix": 0.18, "tone": 0.42},
             "chorus": {"mix": 0.09, "rate": 0.08, "depth": 0.008},
             "reverb": {"mix": 0.16, "room": 0.52, "damp": 0.54, "tone": 0.46},
@@ -153,6 +165,11 @@ PRESETS: dict[str, dict[str, object]] = {
             "voice": {"mode": 3.0, "texture": 0.82, "noiseMix": 0.34, "subMix": 0.18, "motion": 0.88, "resonance": 0.46},
         },
         "fx": {
+            "harshNoise": {"enabled": True, "level": 0.64, "tone": 0.84, "hp": 2600.0, "lp": 15600.0, "duck": 0.12},
+            "highpass": {"enabled": True, "freq": 340.0, "resonance": 0.18, "mix": 0.82},
+            "lowpass": {"enabled": True, "freq": 4200.0, "resonance": 0.24, "mix": 0.56},
+            "distortion": {"enabled": True, "drive": 0.72, "mix": 0.68, "fold": 0.54, "bias": 0.08, "tone": 0.74},
+            "glitch": {"enabled": True, "mix": 0.38, "rate": 12.0, "depth": 0.54, "crush": 0.4, "gate": 0.26},
             "delay": {"time": 0.38, "feedback": 0.56, "mix": 0.44, "tone": 0.82},
             "chorus": {"mix": 0.3, "rate": 0.44, "depth": 0.022},
             "reverb": {"mix": 0.36, "room": 0.88, "damp": 0.22, "tone": 0.86},
@@ -172,10 +189,22 @@ PRESETS: dict[str, dict[str, object]] = {
 ACTION_PATCHES: dict[str, dict[str, object]] = {
     "mute": {
         "body": {"core": {"amp": 0.0, "detected": False}},
-        "fx": {"master": {"output": 0.72, "drive": 0.08}},
+        "fx": {
+            "harshNoise": {"enabled": False, "level": 0.0},
+            "highpass": {"enabled": False},
+            "lowpass": {"enabled": False},
+            "distortion": {"enabled": False, "mix": 0.0},
+            "glitch": {"enabled": False, "mix": 0.0},
+            "master": {"output": 0.72, "drive": 0.08},
+        },
     },
     "dry": {
         "fx": {
+            "harshNoise": {"enabled": False, "level": 0.0},
+            "highpass": {"enabled": False},
+            "lowpass": {"enabled": False},
+            "distortion": {"enabled": False, "mix": 0.0},
+            "glitch": {"enabled": False, "mix": 0.0},
             "delay": {"mix": 0.08, "feedback": 0.16},
             "chorus": {"mix": 0.04},
             "reverb": {"mix": 0.08, "room": 0.38},
@@ -195,6 +224,9 @@ ACTION_PATCHES: dict[str, dict[str, object]] = {
             "voice": {"mode": 3.0, "texture": 0.76, "noiseMix": 0.34, "motion": 0.92, "resonance": 0.4},
         },
         "fx": {
+            "harshNoise": {"enabled": True, "level": 0.46, "tone": 0.78, "hp": 2200.0, "lp": 14200.0, "duck": 0.16},
+            "distortion": {"enabled": True, "drive": 0.38, "mix": 0.32, "fold": 0.24, "bias": 0.02, "tone": 0.72},
+            "glitch": {"enabled": True, "mix": 0.18, "rate": 8.0, "depth": 0.36, "crush": 0.18, "gate": 0.12},
             "delay": {"time": 0.44, "feedback": 0.52, "mix": 0.4, "tone": 0.8},
             "chorus": {"mix": 0.26, "rate": 0.38, "depth": 0.024},
             "reverb": {"mix": 0.34, "room": 0.92, "damp": 0.24, "tone": 0.88},
@@ -205,10 +237,48 @@ ACTION_PATCHES: dict[str, dict[str, object]] = {
             "impact": {"mode": 2.0, "color": 0.68, "amp": 0.7, "freq": 260.0},
         },
     },
+    "brutalize": {
+        "fx": {
+            "harshNoise": {"enabled": True, "level": 0.72, "tone": 0.88, "hp": 2600.0, "lp": 16800.0, "duck": 0.08},
+            "highpass": {"enabled": True, "freq": 420.0, "resonance": 0.18, "mix": 0.86},
+            "distortion": {"enabled": True, "drive": 0.84, "mix": 0.76, "fold": 0.66, "bias": 0.08, "tone": 0.82},
+            "glitch": {"enabled": True, "mix": 0.42, "rate": 11.0, "depth": 0.56, "crush": 0.42, "gate": 0.24},
+            "master": {"drive": 0.42, "output": 0.72},
+        }
+    },
+    "filter-choke": {
+        "fx": {
+            "harshNoise": {"enabled": False, "level": 0.0},
+            "highpass": {"enabled": True, "freq": 1100.0, "resonance": 0.2, "mix": 1.0},
+            "lowpass": {"enabled": True, "freq": 2600.0, "resonance": 0.24, "mix": 0.84},
+            "distortion": {"enabled": False, "mix": 0.0},
+            "glitch": {"enabled": False, "mix": 0.0},
+        }
+    },
+    "glitch-wall": {
+        "fx": {
+            "harshNoise": {"enabled": True, "level": 0.48, "tone": 0.76, "hp": 2000.0, "lp": 12800.0, "duck": 0.1},
+            "distortion": {"enabled": True, "drive": 0.54, "mix": 0.46, "fold": 0.34, "bias": 0.0, "tone": 0.7},
+            "glitch": {"enabled": True, "mix": 0.74, "rate": 15.0, "depth": 0.84, "crush": 0.62, "gate": 0.42},
+            "delay": {"mix": 0.18, "feedback": 0.2},
+            "master": {"drive": 0.34, "output": 0.7},
+        }
+    },
 }
 
 
-AVAILABLE_ACTIONS = ["reset", "mute", "dry", "wide", "storm", "random-soft", "random-bold"]
+AVAILABLE_ACTIONS = [
+    "reset",
+    "mute",
+    "dry",
+    "wide",
+    "storm",
+    "brutalize",
+    "filter-choke",
+    "glitch-wall",
+    "random-soft",
+    "random-bold",
+]
 
 
 TRIGGER_ADDRESS = {
@@ -255,7 +325,9 @@ class ControlBridge:
     def recall_preset(self, name: str) -> dict[str, object]:
         if name not in PRESETS:
             raise KeyError(name)
-        return self.apply_patch(copy.deepcopy(PRESETS[name]))
+        next_state = copy.deepcopy(DEFAULT_STATE)
+        deep_merge(next_state, copy.deepcopy(PRESETS[name]))
+        return self.replace_state(next_state)
 
     def perform_action(self, name: str) -> dict[str, object]:
         if name == "reset":
@@ -313,6 +385,42 @@ class ControlBridge:
                 },
             },
             "fx": {
+                "harshNoise": {
+                    "enabled": self._toggle_variant(rng, intensity, 0.04),
+                    "level": self._jitter(rng, fx["harshNoise"]["level"], 0.0, 0.82, intensity),  # type: ignore[index]
+                    "tone": self._jitter(rng, fx["harshNoise"]["tone"], 0.08, 0.96, intensity),  # type: ignore[index]
+                    "hp": self._jitter(rng, fx["harshNoise"]["hp"], 400.0, 7200.0, intensity),  # type: ignore[index]
+                    "lp": self._jitter(rng, fx["harshNoise"]["lp"], 3200.0, 18000.0, intensity),  # type: ignore[index]
+                    "duck": self._jitter(rng, fx["harshNoise"]["duck"], 0.0, 0.92, intensity),  # type: ignore[index]
+                },
+                "highpass": {
+                    "enabled": self._toggle_variant(rng, intensity, 0.02),
+                    "freq": self._jitter(rng, fx["highpass"]["freq"], 20.0, 2400.0, intensity),  # type: ignore[index]
+                    "resonance": self._jitter(rng, fx["highpass"]["resonance"], 0.08, 0.82, intensity),  # type: ignore[index]
+                    "mix": self._jitter(rng, fx["highpass"]["mix"], 0.18, 1.0, intensity),  # type: ignore[index]
+                },
+                "lowpass": {
+                    "enabled": self._toggle_variant(rng, intensity, 0.08),
+                    "freq": self._jitter(rng, fx["lowpass"]["freq"], 700.0, 18000.0, intensity),  # type: ignore[index]
+                    "resonance": self._jitter(rng, fx["lowpass"]["resonance"], 0.08, 0.86, intensity),  # type: ignore[index]
+                    "mix": self._jitter(rng, fx["lowpass"]["mix"], 0.18, 1.0, intensity),  # type: ignore[index]
+                },
+                "distortion": {
+                    "enabled": self._toggle_variant(rng, intensity, 0.12),
+                    "drive": self._jitter(rng, fx["distortion"]["drive"], 0.0, 0.96, intensity),  # type: ignore[index]
+                    "mix": self._jitter(rng, fx["distortion"]["mix"], 0.0, 0.88, intensity),  # type: ignore[index]
+                    "fold": self._jitter(rng, fx["distortion"]["fold"], 0.0, 0.9, intensity),  # type: ignore[index]
+                    "bias": self._jitter(rng, fx["distortion"]["bias"], -0.32, 0.32, intensity),  # type: ignore[index]
+                    "tone": self._jitter(rng, fx["distortion"]["tone"], 0.12, 0.94, intensity),  # type: ignore[index]
+                },
+                "glitch": {
+                    "enabled": self._toggle_variant(rng, intensity, 0.1),
+                    "mix": self._jitter(rng, fx["glitch"]["mix"], 0.0, 0.92, intensity),  # type: ignore[index]
+                    "rate": self._jitter(rng, fx["glitch"]["rate"], 0.25, 20.0, intensity),  # type: ignore[index]
+                    "depth": self._jitter(rng, fx["glitch"]["depth"], 0.0, 0.92, intensity),  # type: ignore[index]
+                    "crush": self._jitter(rng, fx["glitch"]["crush"], 0.0, 0.92, intensity),  # type: ignore[index]
+                    "gate": self._jitter(rng, fx["glitch"]["gate"], 0.0, 0.8, intensity),  # type: ignore[index]
+                },
                 "delay": {
                     "time": self._jitter(rng, fx["delay"]["time"], 0.04, 0.64, intensity),  # type: ignore[index]
                     "feedback": self._jitter(rng, fx["delay"]["feedback"], 0.08, 0.72, intensity),  # type: ignore[index]
@@ -363,6 +471,10 @@ class ControlBridge:
         next_mode = int(float(current)) + rng.randint(-spread, spread)
         return max(0, min(3, next_mode))
 
+    @staticmethod
+    def _toggle_variant(rng: random.Random, intensity: float, bias: float = 0.0) -> bool:
+        return rng.random() < max(0.0, min(1.0, (intensity * 1.65) + bias))
+
     def _emit_full_state(self, state: dict[str, object]) -> None:
         body = state["body"]  # type: ignore[index]
         body_core = body["core"]  # type: ignore[index]
@@ -381,6 +493,11 @@ class ControlBridge:
         )
         self._send("/vrb/meta/detected", [1 if body_core["detected"] else 0])
         self._send_pairs("/ui/body", body_voice)
+        self._send_pairs("/ui/fx/harshNoise", fx["harshNoise"])  # type: ignore[index]
+        self._send_pairs("/ui/fx/highpass", fx["highpass"])  # type: ignore[index]
+        self._send_pairs("/ui/fx/lowpass", fx["lowpass"])  # type: ignore[index]
+        self._send_pairs("/ui/fx/distortion", fx["distortion"])  # type: ignore[index]
+        self._send_pairs("/ui/fx/glitch", fx["glitch"])  # type: ignore[index]
         self._send_pairs("/ui/fx/delay", fx["delay"])  # type: ignore[index]
         self._send_pairs("/ui/fx/chorus", fx["chorus"])  # type: ignore[index]
         self._send_pairs("/ui/fx/reverb", fx["reverb"])  # type: ignore[index]
@@ -405,8 +522,16 @@ class ControlBridge:
         payload: list[float | int | str] = []
         for key, value in values.items():
             payload.append(key)
-            payload.append(value)  # type: ignore[arg-type]
+            payload.append(self._normalize_osc_value(value))
         self._send(address, payload)
+
+    @staticmethod
+    def _normalize_osc_value(value: object) -> float | int | str:
+        if isinstance(value, bool):
+            return 1 if value else 0
+        if isinstance(value, (float, int, str)):
+            return value
+        return str(value)
 
 
 class ControlHandler(SimpleHTTPRequestHandler):

@@ -48,6 +48,9 @@ POST /api/trigger/{name}
 - `dry`
 - `wide`
 - `storm`
+- `brutalize`
+- `filter-choke`
+- `glitch-wall`
 - `random-soft`
 - `random-bold`
 
@@ -61,6 +64,7 @@ POST /api/trigger/{name}
 ## Interaction Model
 
 - sliders は `input` event で 80ms debounce patch を送る
+- aggressive FX rack の `enabled` は dedicated toggle switch で即時 patch を送る
 - preset / macro / trigger は即時 POST
 - detected toggle は `/vrb/meta/detected` と body amp gate の mirror として扱う
 - UI の state dump は server snapshot をそのまま表示する
@@ -70,6 +74,6 @@ POST /api/trigger/{name}
 - body core は `/synth/body`
 - detected は `/vrb/meta/detected`
 - body voice は `/ui/body`
-- FX は `/ui/fx/delay`, `/ui/fx/chorus`, `/ui/fx/reverb`, `/ui/master`
+- FX は `/ui/fx/harshNoise`, `/ui/fx/highpass`, `/ui/fx/lowpass`, `/ui/fx/distortion`, `/ui/fx/glitch`, `/ui/fx/delay`, `/ui/fx/chorus`, `/ui/fx/reverb`, `/ui/master`
 - trigger timbre は `/ui/trigger/*`
 - trigger fire は `/trigger/*`
