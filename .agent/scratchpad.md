@@ -421,3 +421,22 @@
 
 ### Next Hat Focus
 - Swift Builder can resume from `python.built`; the Python runtime boundary now exposes a real analysis loop instead of an intentional abort.
+
+## Iteration #24 — Swift Builder
+
+### Phase 2 Revalidation
+- Re-verified the existing Swift app shell after the refreshed `python.built` handoff; no source changes were required because the current Package/App/Input/Rendering files already match the Phase 2 contract.
+- Confirmed `cd swift && swift build` still succeeds against the current Satin submodule dependency setup.
+- Re-ran the mandatory Python import gate with the actual public analyzer exports (`SparseFlowAnalyzer`, `deserialise`) and it passes.
+
+## Phase 2: Swift Renderer（Satin + LYGIA）
+- [x] `swift/Package.swift` — Satin submodule dependency
+- [x] `swift/Sources/VirtualRealBody/App/main.swift` + `AppDelegate.swift` — NSApp / fullscreen MTKView
+- [x] `swift/Sources/VirtualRealBody/Data/PoseData.swift` — バイナリプロトコル + GPU uniform structs
+- [x] `swift/Sources/VirtualRealBody/Input/PoseReceiver.swift` — ZMQ subscriber for `yolo.pose` / `mp.pose`
+- [x] `swift/Sources/VirtualRealBody/Input/CameraCapture.swift` — AVCapture → MTLTexture
+- [x] `swift/Sources/VirtualRealBody/Rendering/LygiaResolver.swift` — `#include "lygia/..."` inline expansion
+- [x] `swift/Sources/VirtualRealBody/Rendering/MainRenderer.swift` — MetalViewRenderer subclass with 3-pass pipeline shell
+
+### Next Hat Focus
+- Shader Builder can proceed from a clean `swift.built` handoff without additional Swift-side fixes in this iteration.
