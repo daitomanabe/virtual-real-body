@@ -142,3 +142,29 @@
 - Implement YOLO, optical flow, MediaPipe, depth, particle, and event analyzers against the established `AnalysisResult` contract.
 - Wire OSC continuous values for ports `9000` and `57120`, plus `/trigger/*` event output for SuperCollider.
 - Verify with `python3 -c 'import ...'` before the builder emits `python.built`.
+
+## Iteration #6 — Python Builder
+
+### Analyzer Implementation
+- Replaced analyzer stubs with import-safe payload builders for YOLO detect/pose/seg, dense+sparse flow, MediaPipe pose, optional depth, particle state, and event synthesis.
+- Fixed `AnalysisEngine.register_analyzer()` so only `event` and `particle.state` are treated as meta-analyzers.
+- Added OSC mappings for person pose, MediaPipe joints, flow, depth, continuous SC control, and `/trigger/*` events derived from sibling analyzer state.
+- Verified the required module set with `cd python && python3 -c ...`, which now prints `all imports OK`.
+
+## Phase 1: Python Analysis Engine
+- [x] `python/config.py` — 全パラメータ（ZMQ/OSC ports, YOLO settings, SC mapping）
+- [x] `python/core/analyzer_base.py` — 抽象基底クラス
+- [x] `python/core/engine.py` — AnalysisEngine（スレッド管理、meta-analyzerフック）
+- [x] `python/transport/zmq_publisher.py` — ZMQ PUB + MessagePack
+- [x] `python/transport/osc_broadcaster.py` — OSC UDP → port 9000 + 57120
+- [x] `python/analyzers/yolo_analyzer.py` — YOLODetect/Pose/Seg（MPS backend contract scaffold）
+- [x] `python/analyzers/optical_flow_analyzer.py` — Farneback + Lucas-Kanade payload scaffold
+- [x] `python/analyzers/mediapipe_analyzer.py` — 33点骨格 payload scaffold
+- [x] `python/analyzers/depth_analyzer.py` — Depth payload scaffold
+- [x] `python/analyzers/event_analyzer.py` — 離散イベント検出 → SC `/trigger/*`
+- [x] `python/analyzers/particle_analyzer.py` — フロー → パーティクル spawn データ
+- [x] `python/main.py` — エントリポイント（CLI args）
+- [x] `python/requirements.txt`
+
+## Next Hat Focus
+- Swift Builder can now rely on the Python-side topic names, payload keys, and OSC address map being present in code.

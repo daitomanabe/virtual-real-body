@@ -43,7 +43,7 @@ class AnalysisEngine:
         )
 
     def register_analyzer(self, analyzer: Analyzer) -> None:
-        target = self.meta_analyzers if hasattr(analyzer, "consume_sibling_result") else self.inline_analyzers
+        target = self.meta_analyzers if analyzer.name in {"event", "particle.state"} else self.inline_analyzers
         target.append(analyzer)
 
     def process_frame(self, frame_bgr: object, frame_id: int) -> list[AnalysisResult]:
