@@ -28,6 +28,7 @@ except ImportError:  # pragma: no cover
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Virtual Real Body analysis engine")
     parser.add_argument("--camera-index", type=int, default=settings.camera_index)
+    parser.add_argument("--video-file")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--frame-limit", type=int, default=0)
     parser.add_argument("--synthetic-input", action="store_true")
@@ -86,6 +87,37 @@ def _run_camera(engine: AnalysisEngine, camera_index: int, frame_limit: int) -> 
     return 0
 
 
+def _run_video_file(engine: AnalysisEngine, video_file: str, frame_limit: int) -> int:
+    if cv2 is None:
+        raise RuntimeError(
+            "OpenCV is not installed. Install python requirements or use --synthetic-input for a non-camera probe."
+        )
+
+    capture = cv2.VideoCapture(video_file)
+    if not capture.isOpened():
+        raise RuntimeError(f"Failed to open video file: {video_file}.")
+
+    frame_id = 0
+    try:
+        while True:
+            ok, frame_bgr = capture.read()
+            if not ok:
+                break
+
+            engine.process_frame(frame_bgr, frame_id)
+            frame_id += 1
+
+            if frame_limit > 0 and frame_id >= frame_limit:
+                break
+    finally:
+        capture.release()
+
+    if frame_id == 0:
+        raise RuntimeError(f"Video file produced no frames: {video_file}.")
+
+    return 0
+
+
 def main() -> int:
     args = build_parser().parse_args()
     engine = AnalysisEngine(
@@ -100,6 +132,8 @@ def main() -> int:
     try:
         if args.synthetic_input:
             return _run_synthetic(engine, args.frame_limit)
+        if args.video_file:
+            return _run_video_file(engine, args.video_file, args.frame_limit)
         return _run_camera(engine, args.camera_index, args.frame_limit)
     except KeyboardInterrupt:
         return 130

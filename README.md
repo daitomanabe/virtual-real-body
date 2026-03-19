@@ -96,6 +96,7 @@ Smoke test without a camera:
 cd python
 python3 main.py --dry-run
 python3 main.py --synthetic-input --frame-limit 2
+python3 main.py --video-file /path/to/test.mp4 --frame-limit 60
 ```
 
 Run the live pipeline:
