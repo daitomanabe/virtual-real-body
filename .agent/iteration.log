@@ -23,3 +23,5 @@
 [2026-03-19T08:08:16Z] iteration #9 | Shader Builder | swift.built | done | 実装=VirtualBody/PoseOverlay/Compositor の3 shader pass更新; 検証=swift build成功, python3 import gate成功, xcrun metal未導入をerrors/memoryへ記録
 [2026-03-19T08:09:02Z] event=shader.built
 [2026-03-19T08:11:41Z] iteration #10 | SC Builder | shader.built | done | 実装=supercollider/vrb_receiver.scd を新規作成しSynthDef/OSCdef/FXバス/cleanupを追加; 検証=python3 import gate成功, sclang未導入のためSC実行検証は未実施
+[2026-03-19T08:12:30Z] iteration #11 | Integrator | sc.built | start | reading scratchpad/iteration log, starting protocol/build/integration verification
+[2026-03-19T08:15:35Z] iteration #11 | Integrator | sc.built | issues | Python import gate failed on missing deserialise export; also noted Swift TCP-vs-ZMQ framing mismatch and SC symbol-vs-string OSC named-pair mismatch for follow-up

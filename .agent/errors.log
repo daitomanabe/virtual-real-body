@@ -8,3 +8,4 @@
 [2026-03-19T08:07:41Z] shader_builder | xcrun metal unavailable: unable to find utility metal
 [2026-03-19T08:07:41Z] shader_builder | python import gate probe failed: cannot import name SparseOpticalFlowAnalyzer from analyzers
 [2026-03-19T08:11:21Z] SC Builder | which sclang failed: sclang not found
+[2026-03-19T08:14:40Z] Integrator error | cmd=cd python && python3 -c ... from transport.zmq_publisher import ZMQPublisher, deserialise ... | exit=1 | ImportError: cannot import name deserialise from transport.zmq_publisher

@@ -244,3 +244,14 @@
 
 ## Next Hat Focus
 - SuperCollider Builder can now implement `supercollider/vrb_receiver.scd` against the completed shader handoff.
+
+## Iteration #11 — Integrator
+
+### Verification Summary
+- Python import gate failed exactly at `from transport.zmq_publisher import ZMQPublisher, deserialise`; `deserialise` is not exported in `python/transport/zmq_publisher.py`, so the required integration guard cannot pass yet.
+- Swift build still succeeds, but `swift/Sources/VirtualRealBody/Input/PoseReceiver.swift` currently opens a raw TCP `NWConnection` and parses newline-delimited frames, while Python publishes ZeroMQ PUB packets as `topic + space + msgpack` with no newline framing. Even after the Python import fix, Swift will still not consume live data until the transport contract is aligned.
+- SuperCollider address names match the Python event analyzer at a high level, but `supercollider/vrb_receiver.scd` named-pair parsing only accepts Symbol keys, whereas Python OSC messages send string keys like `"freq"` and `"amp"`; this will need a follow-up SC-side compatibility fix after the Python blocker is cleared.
+- Lygia include paths verified against the checked-out submodule: `circleSDF.msl`, `lineSDF.msl`, and `stroke.msl` exist.
+
+### Decision
+- Emit `review.python` first because the explicit integrator import gate is failing and blocks a valid `integration.done` handoff before later runtime transport mismatches can be re-tested.
