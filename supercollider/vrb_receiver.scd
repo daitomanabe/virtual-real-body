@@ -1,4 +1,3 @@
-(
 // Section 1: boot server with stable audio settings for this project.
 s.options.numInputBusChannels = 0;
 s.options.sampleRate = 44100;
@@ -7,11 +6,10 @@ s.waitForBoot {
 	("listening on langPort=" ++ NetAddr.langPort).postln;
 };
 s.boot;
-)
 
-(
 // Section 2: SynthDef definitions, node setup, and OSC receivers.
-var makeNamedValueParser, firstValue;
+{
+	var makeNamedValueParser, firstValue;
 
 makeNamedValueParser = { |msg|
 	var args, dictionary, i, key, symbolKey, value;
@@ -332,27 +330,25 @@ s.waitForBoot {
 		updateDetected.(firstValue.(msg, 0).asInteger);
 	}, '/vrb/meta/detected', recvPort: NetAddr.langPort);
 
+	~vrbCleanup = {
+		if(OSCdef(\body).notNil) { OSCdef(\body).free };
+		if(OSCdef(\reverbMix).notNil) { OSCdef(\reverbMix).free };
+		if(OSCdef(\reverbRoom).notNil) { OSCdef(\reverbRoom).free };
+		if(OSCdef(\delayTime).notNil) { OSCdef(\delayTime).free };
+		if(OSCdef(\delayFeedback).notNil) { OSCdef(\delayFeedback).free };
+		if(OSCdef(\motionOnset).notNil) { OSCdef(\motionOnset).free };
+		if(OSCdef(\impact).notNil) { OSCdef(\impact).free };
+		if(OSCdef(\personEnter).notNil) { OSCdef(\personEnter).free };
+		if(OSCdef(\personExit).notNil) { OSCdef(\personExit).free };
+		if(OSCdef(\flowBurst).notNil) { OSCdef(\flowBurst).free };
+		if(OSCdef(\detected).notNil) { OSCdef(\detected).free };
+		if(~body.notNil) { ~body.set(\gate, 0) };
+		if(~reverb.notNil) { ~reverb.set(\gate, 0) };
+		if(~delay.notNil) { ~delay.set(\gate, 0) };
+		if(~masterBus.notNil) { ~masterBus.free };
+		if(~fxBus.notNil) { ~fxBus.free };
+	};
+
 	"virtual-real-body: OSCdefs registered".postln;
 };
-)
-
-(
-// Section 3: cleanup and stop.
-OSCdef(\body).free;
-OSCdef(\reverbMix).free;
-OSCdef(\reverbRoom).free;
-OSCdef(\delayTime).free;
-OSCdef(\delayFeedback).free;
-OSCdef(\motionOnset).free;
-OSCdef(\impact).free;
-OSCdef(\personEnter).free;
-OSCdef(\personExit).free;
-OSCdef(\flowBurst).free;
-OSCdef(\detected).free;
-
-if(~body.notNil) { ~body.set(\gate, 0) };
-if(~reverb.notNil) { ~reverb.set(\gate, 0) };
-if(~delay.notNil) { ~delay.set(\gate, 0) };
-if(~masterBus.notNil) { ~masterBus.free };
-if(~fxBus.notNil) { ~fxBus.free };
-)
+}.value;

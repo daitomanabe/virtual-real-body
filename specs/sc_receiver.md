@@ -5,6 +5,7 @@
 - 受信ポート: `57120`
 - 常時音用 body synth と、離散イベント用 trigger synth を分離する
 - FX は専用バスで後段処理する
+- `sclang supercollider/vrb_receiver.scd` でファイル全体を直接実行できる構造にする
 
 ## Server Options
 
@@ -55,6 +56,7 @@ s.options.sampleRate = 44100;
 - 出力は `Pan2.ar(...)` か `sig ! 2` でステレオ化する
 - クリップ対策として最終出力は `.tanh` を通す
 - `person_enter` / `person_exit` は `pan` を受け取った場合に空間位置へ反映する
+- cleanup は自動実行せず、必要なら `~vrbCleanup.()` で呼べるようにする
 
 ## Named Pair Parsing
 
