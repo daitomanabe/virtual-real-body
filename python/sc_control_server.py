@@ -3,18 +3,21 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import mimetypes
 import random
 import threading
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from pythonosc.udp_client import SimpleUDPClient
+from runtime_session import RuntimeSessionStore
 
 
 ROOT = Path(__file__).resolve().parent.parent
 WEBUI_DIR = ROOT / "webui"
+MEDIA_VIDEO_EXTENSIONS = {".mov", ".mp4", ".m4v", ".avi", ".mkv"}
 
 
 DEFAULT_STATE: dict[str, object] = {
@@ -280,6 +283,18 @@ AVAILABLE_ACTIONS = [
     "random-bold",
 ]
 
+from control_surface_catalog import (  # noqa: E402
+    ACTION_META,
+    ACTION_PATCHES,
+    AVAILABLE_ACTIONS,
+    BODY_MODE_MAX,
+    DEFAULT_STATE,
+    PRESET_META,
+    PRESET_ORDER,
+    PRESETS,
+    TRIGGER_MODE_MAX,
+)
+
 
 TRIGGER_ADDRESS = {
     "onset": "/trigger/motion_onset",
@@ -376,12 +391,16 @@ class ControlBridge:
                     "detected": True,
                 },
                 "voice": {
-                    "mode": float(self._mode_variant(rng, body["voice"]["mode"], intensity)),  # type: ignore[index]
+                    "mode": float(self._mode_variant(rng, body["voice"]["mode"], intensity, BODY_MODE_MAX)),  # type: ignore[index]
                     "texture": self._jitter(rng, body["voice"]["texture"], 0.05, 0.95, intensity),  # type: ignore[index]
                     "noiseMix": self._jitter(rng, body["voice"]["noiseMix"], 0.0, 0.45, intensity),  # type: ignore[index]
                     "subMix": self._jitter(rng, body["voice"]["subMix"], 0.1, 0.86, intensity),  # type: ignore[index]
                     "motion": self._jitter(rng, body["voice"]["motion"], 0.02, 0.96, intensity),  # type: ignore[index]
                     "resonance": self._jitter(rng, body["voice"]["resonance"], 0.08, 0.82, intensity),  # type: ignore[index]
+                    "airMix": self._jitter(rng, body["voice"]["airMix"], 0.0, 0.96, intensity),  # type: ignore[index]
+                    "ringMix": self._jitter(rng, body["voice"]["ringMix"], 0.0, 0.96, intensity),  # type: ignore[index]
+                    "grit": self._jitter(rng, body["voice"]["grit"], 0.0, 0.96, intensity),  # type: ignore[index]
+                    "drift": self._jitter(rng, body["voice"]["drift"], 0.0, 0.96, intensity),  # type: ignore[index]
                 },
             },
             "fx": {
@@ -421,6 +440,12 @@ class ControlBridge:
                     "crush": self._jitter(rng, fx["glitch"]["crush"], 0.0, 0.92, intensity),  # type: ignore[index]
                     "gate": self._jitter(rng, fx["glitch"]["gate"], 0.0, 0.8, intensity),  # type: ignore[index]
                 },
+                "resonator": {
+                    "mix": self._jitter(rng, fx["resonator"]["mix"], 0.0, 0.76, intensity),  # type: ignore[index]
+                    "tune": self._jitter(rng, fx["resonator"]["tune"], 0.04, 0.96, intensity),  # type: ignore[index]
+                    "decay": self._jitter(rng, fx["resonator"]["decay"], 0.04, 0.92, intensity),  # type: ignore[index]
+                    "spread": self._jitter(rng, fx["resonator"]["spread"], 0.0, 0.92, intensity),  # type: ignore[index]
+                },
                 "delay": {
                     "time": self._jitter(rng, fx["delay"]["time"], 0.04, 0.64, intensity),  # type: ignore[index]
                     "feedback": self._jitter(rng, fx["delay"]["feedback"], 0.08, 0.72, intensity),  # type: ignore[index]
@@ -438,6 +463,12 @@ class ControlBridge:
                     "damp": self._jitter(rng, fx["reverb"]["damp"], 0.12, 0.72, intensity),  # type: ignore[index]
                     "tone": self._jitter(rng, fx["reverb"]["tone"], 0.24, 0.92, intensity),  # type: ignore[index]
                 },
+                "shimmer": {
+                    "mix": self._jitter(rng, fx["shimmer"]["mix"], 0.0, 0.72, intensity),  # type: ignore[index]
+                    "shift": self._jitter(rng, fx["shimmer"]["shift"], 0.0, 1.0, intensity),  # type: ignore[index]
+                    "feedback": self._jitter(rng, fx["shimmer"]["feedback"], 0.0, 0.82, intensity),  # type: ignore[index]
+                    "tone": self._jitter(rng, fx["shimmer"]["tone"], 0.16, 0.96, intensity),  # type: ignore[index]
+                },
                 "master": {
                     "drive": self._jitter(rng, fx["master"]["drive"], 0.02, 0.46, intensity),  # type: ignore[index]
                     "width": self._jitter(rng, fx["master"]["width"], 0.0, 0.82, intensity),  # type: ignore[index]
@@ -450,7 +481,7 @@ class ControlBridge:
         }
         for name, values in triggers.items():  # type: ignore[assignment]
             patch["triggers"][name] = {
-                "mode": float(self._mode_variant(rng, values["mode"], intensity)),
+                "mode": float(self._mode_variant(rng, values["mode"], intensity, TRIGGER_MODE_MAX)),
                 "color": self._jitter(rng, values["color"], 0.08, 0.96, intensity),
                 "amp": self._jitter(rng, values["amp"], 0.16, 0.94, intensity),
                 "freq": self._jitter(rng, values["freq"], 80.0, 2200.0, intensity),
@@ -466,10 +497,10 @@ class ControlBridge:
         return round(max(minimum, min(maximum, next_value)), 4)
 
     @staticmethod
-    def _mode_variant(rng: random.Random, current: object, intensity: float) -> int:
+    def _mode_variant(rng: random.Random, current: object, intensity: float, maximum: int) -> int:
         spread = 1 if intensity < 0.25 else 3
         next_mode = int(float(current)) + rng.randint(-spread, spread)
-        return max(0, min(3, next_mode))
+        return max(0, min(maximum, next_mode))
 
     @staticmethod
     def _toggle_variant(rng: random.Random, intensity: float, bias: float = 0.0) -> bool:
@@ -498,9 +529,11 @@ class ControlBridge:
         self._send_pairs("/ui/fx/lowpass", fx["lowpass"])  # type: ignore[index]
         self._send_pairs("/ui/fx/distortion", fx["distortion"])  # type: ignore[index]
         self._send_pairs("/ui/fx/glitch", fx["glitch"])  # type: ignore[index]
+        self._send_pairs("/ui/fx/resonator", fx["resonator"])  # type: ignore[index]
         self._send_pairs("/ui/fx/delay", fx["delay"])  # type: ignore[index]
         self._send_pairs("/ui/fx/chorus", fx["chorus"])  # type: ignore[index]
         self._send_pairs("/ui/fx/reverb", fx["reverb"])  # type: ignore[index]
+        self._send_pairs("/ui/fx/shimmer", fx["shimmer"])  # type: ignore[index]
         self._send_pairs("/ui/master", fx["master"])  # type: ignore[index]
         self._send_pairs("/ui/trigger/onset", self._pick_trigger_voice(triggers["onset"]))  # type: ignore[index]
         self._send_pairs("/ui/trigger/impact", self._pick_trigger_voice(triggers["impact"]))  # type: ignore[index]
@@ -536,6 +569,7 @@ class ControlBridge:
 
 class ControlHandler(SimpleHTTPRequestHandler):
     bridge: ControlBridge
+    session_store: RuntimeSessionStore
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(WEBUI_DIR), **kwargs)
@@ -545,15 +579,42 @@ class ControlHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/state":
             self._write_json({"state": self.bridge.snapshot()})
             return
+        if parsed.path == "/api/session":
+            self._write_json(self.session_store.payload())
+            return
+        if parsed.path == "/api/media/video":
+            self._serve_video_preview(parsed.query)
+            return
         if parsed.path == "/api/presets":
-            self._write_json({"presets": sorted(PRESETS.keys())})
+            self._write_json(
+                {
+                    "presets": [
+                        {"name": name, **PRESET_META.get(name, {})}
+                        for name in PRESET_ORDER
+                    ]
+                }
+            )
             return
         if parsed.path == "/api/actions":
-            self._write_json({"actions": AVAILABLE_ACTIONS})
+            self._write_json(
+                {
+                    "actions": [
+                        {"name": name, **ACTION_META.get(name, {})}
+                        for name in AVAILABLE_ACTIONS
+                    ]
+                }
+            )
             return
         if parsed.path == "/":
             self.path = "/index.html"
         super().do_GET()
+
+    def do_HEAD(self) -> None:
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/media/video":
+            self._serve_video_preview(parsed.query, head_only=True)
+            return
+        super().do_HEAD()
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
@@ -561,6 +622,10 @@ class ControlHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/state":
             state = self.bridge.apply_patch(body)
             self._write_json({"state": state})
+            return
+        if parsed.path == "/api/session":
+            session = self.session_store.apply_patch(body)
+            self._write_json({"session": session, "media": self.session_store.payload()["media"]})
             return
         if parsed.path.startswith("/api/preset/"):
             preset_name = parsed.path.rsplit("/", 1)[-1]
@@ -612,6 +677,80 @@ class ControlHandler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(encoded)
 
+    def _serve_video_preview(self, query: str, head_only: bool = False) -> None:
+        params = parse_qs(query)
+        raw_path = (params.get("path") or [""])[0].strip()
+        if not raw_path:
+            self.send_error(HTTPStatus.BAD_REQUEST, "Missing video path")
+            return
+
+        requested = Path(raw_path).expanduser()
+        file_path = (requested if requested.is_absolute() else (ROOT / requested)).resolve()
+        if not file_path.exists() or not file_path.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND, f"Missing video file: {file_path}")
+            return
+        if file_path.suffix.lower() not in MEDIA_VIDEO_EXTENSIONS:
+            self.send_error(HTTPStatus.BAD_REQUEST, f"Unsupported video type: {file_path.suffix}")
+            return
+
+        self._serve_file_with_range(file_path, head_only=head_only)
+
+    def _serve_file_with_range(self, file_path: Path, head_only: bool = False) -> None:
+        file_size = file_path.stat().st_size
+        content_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+        range_header = self.headers.get("Range", "").strip()
+        start = 0
+        end = max(file_size - 1, 0)
+        status = HTTPStatus.OK
+
+        if range_header.startswith("bytes="):
+            start_text, _, end_text = range_header[6:].partition("-")
+            try:
+                if start_text:
+                    start = int(start_text)
+                if end_text:
+                    end = int(end_text)
+                if start_text == "" and end_text:
+                    suffix_length = int(end_text)
+                    start = max(file_size - suffix_length, 0)
+                    end = max(file_size - 1, 0)
+            except ValueError:
+                self.send_error(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE, "Invalid Range header")
+                return
+
+            if file_size == 0 or start < 0 or start >= file_size:
+                self.send_error(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE, "Range start out of bounds")
+                return
+
+            end = min(end if end_text else file_size - 1, file_size - 1)
+            if end < start:
+                self.send_error(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE, "Range end before start")
+                return
+            status = HTTPStatus.PARTIAL_CONTENT
+
+        content_length = max(end - start + 1, 0)
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(content_length))
+        if status == HTTPStatus.PARTIAL_CONTENT:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+        self.end_headers()
+
+        if head_only:
+            return
+
+        with file_path.open("rb") as handle:
+            handle.seek(start)
+            remaining = content_length
+            while remaining > 0:
+                chunk = handle.read(min(64 * 1024, remaining))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Serve a WebUI for SuperCollider control")
@@ -625,9 +764,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     bridge = ControlBridge(args.sc_host, args.sc_port)
+    session_store = RuntimeSessionStore()
     bridge.apply_patch({})
 
-    handler = type("BoundControlHandler", (ControlHandler,), {"bridge": bridge})
+    handler = type(
+        "BoundControlHandler",
+        (ControlHandler,),
+        {
+            "bridge": bridge,
+            "session_store": session_store,
+        },
+    )
     server = ThreadingHTTPServer((args.host, args.port), handler)
     print(f"sc-control-server listening on http://{args.host}:{args.port} -> {args.sc_host}:{args.sc_port}")
     try:

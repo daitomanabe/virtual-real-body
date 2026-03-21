@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VRB Input Monitor</title>
+    <link rel="stylesheet" href="/monitor.css" />
+    <script defer src="/monitor.js"></script>
+  </head>
+  <body>
+    <div class="monitor-shell">
+      <aside class="monitor-rail">
+        <div class="rail-block rail-title">
+          <p class="rail-kicker">Virtual Real Body</p>
+          <h1>Input Monitor</h1>
+          <p class="rail-copy">
+            Scene-first monitor for live camera and movie input. Controls stay off the image plane.
+          </p>
+        </div>
+
+        <div class="rail-block">
+          <div class="block-head">
+            <span class="block-label">Source</span>
+            <span class="block-value" id="monitor-source-summary">Waiting</span>
+          </div>
+          <div class="source-mode-row">
+            <button class="source-mode-button" data-source-mode="camera" type="button">Device</button>
+            <button class="source-mode-button" data-source-mode="video" type="button">Movie</button>
+          </div>
+          <label class="field" for="monitor-device-select">
+            <span>Capture Device</span>
+            <select id="monitor-device-select"></select>
+          </label>
+          <label class="field" for="monitor-video-select">
+            <span>Asset Movie</span>
+            <select id="monitor-video-select"></select>
+          </label>
+          <label class="field" for="monitor-video-path">
+            <span>Movie Path</span>
+            <input id="monitor-video-path" type="text" placeholder="/absolute/path/to/video.mov" />
+          </label>
+          <button class="toggle-button" id="monitor-loop-toggle" type="button">Loop ON</button>
+        </div>
+
+        <div class="rail-block">
+          <div class="block-head">
+            <span class="block-label">Status</span>
+            <span class="block-value" id="monitor-status">Connecting</span>
+          </div>
+          <p class="status-copy" id="monitor-preview-status">Waiting for session</p>
+        </div>
+
+        <div class="rail-block rail-actions">
+          <a class="action-button primary" href="/">Open Operator Console</a>
+          <button class="action-button" id="monitor-browser-fullscreen" type="button">Browser Fullscreen</button>
+          <button class="action-button" id="monitor-refresh" type="button">Refresh Session</button>
+        </div>
+      </aside>
+
+      <main class="monitor-stage">
+        <header class="stage-header">
+          <div>
+            <p class="stage-kicker">Live Input</p>
+            <h2 id="monitor-stage-title">Waiting for source</h2>
+          </div>
+          <div class="stage-meta">
+            <span class="meta-chip" id="monitor-source-chip">No Source</span>
+            <span class="meta-chip" id="monitor-session-file">session</span>
+          </div>
+        </header>
+
+        <section class="stage-frame">
+          <video id="monitor-preview" class="stage-media" autoplay muted playsinline></video>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

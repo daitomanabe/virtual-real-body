@@ -16,11 +16,18 @@
       <section class="hero-panel">
         <div class="hero-copy">
           <p class="eyebrow">Virtual Real Body</p>
-          <h1>Control Surface</h1>
+          <h1>Expanded Control Surface</h1>
           <p class="summary">
-            Sculpt the SuperCollider engine in real time. Body voice, trigger families,
-            aggressive FX racks, spectral processors, and manual event fires all stay inside one fixed workspace.
+            Operator console for sound and analysis routing. Input monitoring is separated into a dedicated scene-first
+            page so controls never sit on top of live camera or movie imagery.
           </p>
+          <div class="section-nav">
+            <button class="nav-chip" data-target="quick-section" type="button">Quick</button>
+            <button class="nav-chip" data-target="body-core-section" type="button">Body</button>
+            <button class="nav-chip" data-target="fx-section" type="button">FX</button>
+            <button class="nav-chip" data-target="trigger-voice-section" type="button">Triggers</button>
+            <a class="secondary-button monitor-link" href="/monitor.html" target="_blank" rel="noreferrer">Open Input Monitor</a>
+          </div>
         </div>
         <div class="hero-status">
           <div class="status-card">
@@ -31,12 +38,24 @@
             <span class="status-label">Detected</span>
             <button class="toggle-pill" id="detected-toggle" type="button">ON</button>
           </div>
+          <div class="status-card">
+            <span class="status-label">Preset</span>
+            <span class="status-value mini" id="active-preset">Manual</span>
+          </div>
+          <div class="status-card">
+            <span class="status-label">Action</span>
+            <span class="status-value mini" id="active-action">Idle</span>
+          </div>
           <div class="status-card wide">
-            <span class="status-label">Preset Lane</span>
+            <div class="panel-header compact">
+              <h2>Scene Presets</h2>
+            </div>
             <div class="preset-grid" id="preset-grid"></div>
           </div>
           <div class="status-card wide">
-            <span class="status-label">Macro Actions</span>
+            <div class="panel-header compact">
+              <h2>Macro Actions</h2>
+            </div>
             <div class="action-grid" id="action-grid"></div>
           </div>
         </div>
@@ -48,6 +67,68 @@
             <h2>Performance Bus</h2>
             <button class="secondary-button" id="refresh-state" type="button">Resync</button>
           </div>
+
+          <section class="mini-section session-section" id="session-section">
+            <div class="panel-header compact">
+              <h2>Realtime Session</h2>
+              <span class="data-pill" id="session-file-label">session</span>
+              <a class="secondary-button monitor-link" href="/monitor.html" target="_blank" rel="noreferrer">Monitor</a>
+            </div>
+            <div class="session-grid">
+              <div class="session-field">
+                <span class="session-label">Input Route</span>
+                <div class="segmented-row" id="source-mode-group">
+                  <button class="nav-chip" data-source-mode="camera" type="button">Device</button>
+                  <button class="nav-chip" data-source-mode="video" type="button">Movie</button>
+                </div>
+                <span class="session-summary" id="source-summary">Device</span>
+              </div>
+
+              <label class="session-field" for="device-select">
+                <span class="session-label">Capture Device</span>
+                <select id="device-select"></select>
+              </label>
+
+              <label class="session-field" for="camera-index-input">
+                <span class="session-label">Device Index</span>
+                <input id="camera-index-input" type="number" min="0" step="1" value="0" />
+              </label>
+
+              <label class="session-field" for="video-select">
+                <span class="session-label">Loaded Movie</span>
+                <select id="video-select"></select>
+              </label>
+
+              <label class="session-field session-field-wide" for="video-path-input">
+                <span class="session-label">Movie File Path</span>
+                <input id="video-path-input" type="text" placeholder="/absolute/path/to/video.mov" />
+              </label>
+
+              <div class="session-field">
+                <span class="session-label">Video Loop</span>
+                <button class="toggle-switch" id="video-loop-toggle" type="button">ON</button>
+              </div>
+
+              <label class="session-field" for="display-target-select">
+                <span class="session-label">Overlay Display</span>
+                <select id="display-target-select">
+                  <option value="external_preferred">External Preferred</option>
+                  <option value="main">Main Display</option>
+                </select>
+                <span class="session-summary" id="display-summary">External Preferred</span>
+              </label>
+
+              <div class="session-field">
+                <span class="session-label">Fullscreen</span>
+                <button class="toggle-switch" id="fullscreen-toggle" type="button">ON</button>
+              </div>
+            </div>
+            <p class="session-note">
+              映像 monitor は別ページで扱います。ここでは routing と display state のみを操作し、camera / movie の実画面は
+              <a href="/monitor.html" target="_blank" rel="noreferrer">Input Monitor</a> で確認します。
+            </p>
+          </section>
+
           <div class="meter-cluster">
             <div class="meter-card">
               <label>Frequency</label>
@@ -67,14 +148,33 @@
             </div>
           </div>
 
-          <div class="trigger-wall" id="trigger-wall"></div>
-
-          <div class="state-panel">
-            <div class="panel-header">
-              <h2>Current State</h2>
+          <section class="mini-section" id="quick-section">
+            <div class="panel-header compact">
+              <h2>Quick Body</h2>
             </div>
+            <div class="control-grid compact" id="quick-body-grid"></div>
+          </section>
+
+          <section class="mini-section">
+            <div class="panel-header compact">
+              <h2>Space Lane</h2>
+            </div>
+            <div class="control-grid compact" id="quick-space-grid"></div>
+          </section>
+
+          <section class="mini-section">
+            <div class="panel-header compact">
+              <h2>Trigger Pad</h2>
+            </div>
+            <div class="trigger-wall" id="trigger-wall"></div>
+          </section>
+
+          <details class="state-panel">
+            <summary class="panel-header compact">
+              <h2>State Snapshot</h2>
+            </summary>
             <pre id="state-dump"></pre>
-          </div>
+          </details>
         </div>
 
         <div class="control-panel">
