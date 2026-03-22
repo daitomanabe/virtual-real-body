@@ -51,6 +51,8 @@ The renderer creates two offscreen passes:
 
 Those passes are combined in `Compositor.metal` into the final side-by-side output.
 
+The virtual body renderer now exposes ten keyboard-selectable looks: `0` auto, `1` lattice, `2` membrane, `3` ribbons, `4` swarm, `5` prism, `6` aurora, `7` sonar, `8` glitch, and `9` eclipse.
+
 The virtual body now has five visual behavior families driven by analysis input:
 
 - `lattice` skeleton and joint energy
@@ -65,7 +67,7 @@ Press `0` for auto mode, or `1` to `5` to lock one family while the renderer is 
 
 - Script: `supercollider/vrb_receiver.scd`
 - Boot config sets `numInputBusChannels = 0` and `sampleRate = 44100`
-- Registers persistent body, harsh-noise / filter / distortion / glitch processors, delay, chorus, reverb, and master synths plus trigger synths for motion onset, impact, enter, exit, and flow burst
+- Registers a six-mode persistent body synth, harsh-noise / filter / distortion / glitch processors, resonator, delay, chorus, reverb, shimmer, and master synths plus trigger synths for motion onset, impact, enter, exit, and flow burst
 - Accepts both analysis OSC from Python and manual control OSC from the WebUI bridge
 
 The OSC parser accepts named-pair payloads from Python, including both `String` and `Symbol` keys.
@@ -76,7 +78,7 @@ The OSC parser accepts named-pair payloads from Python, including both `String` 
 - Static UI: `webui/index.html`, `webui/app.js`, `webui/styles.css`
 - HTTP default: `127.0.0.1:8080`
 
-The control surface mirrors the SuperCollider runtime state, exposes six presets, ten macro actions, direct trigger fire buttons, and toggle / slider controls for body, aggressive FX racks, and trigger parameters.
+The control surface mirrors the SuperCollider runtime state, exposes ten scene presets, twelve macro actions, direct trigger fire buttons, a quick-perform lane, and detailed controls for body, FX racks, and trigger parameters.
 
 ## Setup
 

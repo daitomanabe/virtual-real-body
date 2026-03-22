@@ -43,14 +43,16 @@ s.boot;
 	};
 
 	s.waitForBoot {
-		var makeTrigger, setBodyState, refreshFxState, updateDetected, updateTriggerState;
+		var makeTrigger, setBodyState, setSceneState, refreshFxState, updateDetected, updateTriggerState;
 
 		SynthDef(\vrb_body, {
 			|out=0, gate=1, freq=220, amp=0.0, cutoff=1200, pan=0, mode=0, texture=0.35, noiseMix=0.18, subMix=0.55, motion=0.35, resonance=0.22,
+			airMix=0.14, ringMix=0.12, grit=0.18, drift=0.18,
 			poseLift=0.0, poseSpread=0.0, poseTwist=0.0, poseGesture=0.0, poseStride=0.0, poseSymmetry=0.5, poseHeight=0.5, poseLean=0.0, poseEnergy=0.0|
-			var env, freqCtl, ampCtl, cutoffCtl, panCtl, modeCtl, textureCtl, noiseCtl, subCtl, motionCtl, resonanceCtl;
+			var env, freqCtl, ampCtl, cutoffCtl, panCtl, modeCtl, textureCtl, noiseCtl, subCtl, motionCtl, resonanceCtl, airCtl, ringCtl, gritCtl, driftCtl;
 			var liftCtl, spreadCtl, twistCtl, gestureCtl, strideCtl, symmetryCtl, heightCtl, leanCtl, energyCtl;
-			var motionLfo, spectralLfo, layerA, layerB, layerC, layerD, harmonic, breath, click, resonCloud, sig, drive, subFreq;
+			var motionLfo, spectralLfo, driftLfo, layerA, layerB, layerC, layerD, layerE, layerF, harmonic;
+			var breath, click, resonCloud, airLayer, ringLayer, foldSig, sig, drive, subFreq;
 			liftCtl = Lag.kr(poseLift.clip(0, 1), 0.12);
 			spreadCtl = Lag.kr(poseSpread.clip(0, 1), 0.12);
 			twistCtl = Lag.kr(poseTwist.clip(-1, 1), 0.1);
@@ -60,11 +62,19 @@ s.boot;
 			heightCtl = Lag.kr(poseHeight.clip(0, 1), 0.12);
 			leanCtl = Lag.kr(poseLean.clip(-1, 1), 0.12);
 			energyCtl = Lag.kr(poseEnergy.clip(0, 1), 0.08);
-			freqCtl = Lag.kr(freq.clip(35, 2400), 0.08) * heightCtl.linexp(0.0, 1.0, 0.82, 1.18) * liftCtl.linexp(0.0, 1.0, 0.96, 1.14);
+			airCtl = Lag.kr(airMix.clip(0, 1), 0.14);
+			ringCtl = Lag.kr(ringMix.clip(0, 1), 0.14);
+			gritCtl = Lag.kr(grit.clip(0, 1), 0.1);
+			driftCtl = Lag.kr(drift.clip(0, 1), 0.16);
+			driftLfo = LFNoise2.kr(0.15 + (driftCtl * 1.6)).range(
+				1.0 - (driftCtl * 0.08),
+				1.0 + (driftCtl * 0.08)
+			);
+			freqCtl = Lag.kr(freq.clip(35, 2400), 0.08) * heightCtl.linexp(0.0, 1.0, 0.82, 1.18) * liftCtl.linexp(0.0, 1.0, 0.96, 1.14) * driftLfo;
 			ampCtl = Lag.kr(amp.clip(0, 1), 0.14);
 			cutoffCtl = Lag.kr(cutoff.clip(120, 10000), 0.14);
 			panCtl = Lag.kr(pan.clip(-1, 1), 0.1);
-			modeCtl = Lag.kr(mode.clip(0, 3), 0.18);
+			modeCtl = Lag.kr(mode.clip(0, 5), 0.18);
 			textureCtl = Lag.kr(texture.clip(0, 1), 0.18);
 			noiseCtl = Lag.kr(noiseMix.clip(0, 1), 0.18);
 			subCtl = Lag.kr(subMix.clip(0, 1), 0.18);
@@ -72,13 +82,13 @@ s.boot;
 			resonanceCtl = Lag.kr(resonance.clip(0.08, 0.95), 0.16);
 			env = EnvGen.kr(Env.asr(0.25, 1.0, 1.3), gate: gate, doneAction: 2);
 			motionLfo = LFNoise2.kr((motionCtl + (gestureCtl * 0.6)).linlin(0.0, 1.6, 0.25, 8.0)).range(
-				1.0 - (motionCtl * 0.08) - (gestureCtl * 0.05),
-				1.0 + (motionCtl * 0.08) + (gestureCtl * 0.05)
+				1.0 - (motionCtl * 0.08) - (gestureCtl * 0.05) - (driftCtl * 0.03),
+				1.0 + (motionCtl * 0.08) + (gestureCtl * 0.05) + (driftCtl * 0.03)
 			);
 			spectralLfo = SinOsc.kr(
-				(0.08 + (spreadCtl * 0.8) + (gestureCtl * 1.4)).clip(0.05, 8.0),
+				(0.08 + (spreadCtl * 0.8) + (gestureCtl * 1.4) + (driftCtl * 0.8)).clip(0.05, 8.0),
 				twistCtl * pi,
-				spreadCtl.linlin(0.0, 1.0, 0.0, 0.06),
+				spreadCtl.linlin(0.0, 1.0, 0.0, 0.06) + (driftCtl * 0.025),
 				1.0
 			);
 			subFreq = freqCtl * (0.42 + (strideCtl * 0.14));
@@ -117,25 +127,73 @@ s.boot;
 				+ VarSaw.ar(freqCtl * 2.0, 0, 0.2, 0.06)
 			);
 
-			harmonic = SelectX.ar(modeCtl, [layerA, layerB, layerC, layerD]);
+			layerE = (
+				Ringz.ar(
+					HPF.ar(WhiteNoise.ar(0.16 + (airCtl * 0.12)), 1200),
+					(freqCtl * [1.0, 1.37 + (driftCtl * 0.12), 2.08 + (ringCtl * 0.26), 2.92 + (airCtl * 0.36)]).clip(140, 11000),
+					0.08 + (airCtl * 0.16)
+				).sum * (0.07 + (ringCtl * 0.2))
+				+ Formant.ar(
+					(freqCtl * 0.5).clip(40, 1200),
+					(cutoffCtl * (0.9 + (airCtl * 1.2))).clip(400, 6500),
+					(freqCtl * (1.0 + (driftCtl * 0.4))).clip(120, 2200)
+				) * (0.16 + (airCtl * 0.08))
+				+ SinOsc.ar(freqCtl * [0.5, 1.0 + (driftCtl * 0.02)], [0, pi * 0.33], [0.08, 0.06]).sum
+			);
+
+			layerF = (
+				SyncSaw.ar(
+					(freqCtl * [0.5, 0.503 + (driftCtl * 0.01)]).clip(30, 1800),
+					(freqCtl * [1.0, 1.98 + (ringCtl * 0.6)]).clip(60, 9000),
+					[0.1, 0.08]
+				).sum
+				+ PMOsc.ar(
+					(freqCtl * (1.0 + (driftCtl * 0.06))).clip(40, 2400),
+					(freqCtl * (3.2 + (ringCtl * 1.6))).clip(120, 10000),
+					0.4 + (textureCtl * 2.0) + (gritCtl * 1.2),
+					0,
+					0.16
+				)
+				+ BPF.ar(GrayNoise.ar(0.2), (cutoffCtl * (1.2 + (airCtl * 2.0))).clip(700, 12000), 0.14) * (0.08 + (airCtl * 0.1))
+			);
+
+			harmonic = SelectX.ar(modeCtl, [layerA, layerB, layerC, layerD, layerE, layerF]);
 			harmonic = RLPF.ar(harmonic, cutoffCtl * spreadCtl.linlin(0.0, 1.0, 0.9, 1.22), resonanceCtl);
 			breath = HPF.ar(
 				PinkNoise.ar(0.16 + (gestureCtl * 0.12)),
 				(cutoffCtl * (0.24 + (liftCtl * 0.26))).clip(150, 4200)
-			) * (noiseCtl + (gestureCtl * 0.22) + ((1.0 - symmetryCtl) * 0.12)) * (0.1 + (ampCtl * 0.12));
+			) * (noiseCtl + (gestureCtl * 0.18) + ((1.0 - symmetryCtl) * 0.1) + (airCtl * 0.18)) * (0.05 + (ampCtl * 0.08));
 			click = BPF.ar(
 				GrayNoise.ar(0.08 + (gestureCtl * 0.08)),
 				(cutoffCtl * (1.2 + (liftCtl * 1.6))).clip(800, 12000),
 				0.12
-			) * ((textureCtl * 0.12) + (energyCtl * 0.08));
+			) * ((textureCtl * 0.08) + (energyCtl * 0.05) + (airCtl * 0.06));
 			resonCloud = Ringz.ar(
 				Dust2.ar(2 + (gestureCtl * 18) + (strideCtl * 10)),
 				(freqCtl * [1.0, 1.0 + (spreadCtl * 0.45), 2.0 + liftCtl]).clip(120, 9000),
 				0.05 + (strideCtl * 0.08)
 			).sum * (0.04 + (energyCtl * 0.14));
-			sig = LeakDC.ar(harmonic + breath + click + resonCloud);
+			airLayer = (
+				BPF.ar(
+					WhiteNoise.ar(0.12 + (gestureCtl * 0.08)),
+					(cutoffCtl * (1.1 + (airCtl * 2.8))).clip(900, 14000),
+					0.18
+				)
+				+ HPF.ar(
+					PinkNoise.ar(0.08 + (airCtl * 0.06)),
+					(cutoffCtl * (0.9 + (airCtl * 1.8))).clip(1200, 15000)
+				)
+			) * (airCtl * (0.06 + (ampCtl * 0.08)));
+			ringLayer = Ringz.ar(
+				((harmonic * (0.28 + (ringCtl * 0.42))) + HPF.ar(GrayNoise.ar(0.1), 900)).tanh,
+				(freqCtl * [1.49 + (driftCtl * 0.1), 2.03 + (spreadCtl * 0.3), 3.17 + (airCtl * 0.55)]).clip(180, 12000),
+				0.04 + (ringCtl * 0.12)
+			).sum * (0.03 + (ringCtl * 0.18));
+			sig = LeakDC.ar(harmonic + breath + click + resonCloud + airLayer + ringLayer);
 			sig = HPF.ar(sig, 30);
-			drive = 1.1 + (ampCtl * 2.2) + (textureCtl * 1.4) + (gestureCtl * 1.4) + ((1.0 - symmetryCtl) * 0.7);
+			foldSig = Fold.ar(sig * (1.0 + (gritCtl * 2.6)), -0.8, 0.8) * (gritCtl * 0.18);
+			sig = sig + foldSig;
+			drive = 1.0 + (ampCtl * 1.6) + (textureCtl * 1.0) + (gestureCtl * 1.0) + ((1.0 - symmetryCtl) * 0.45) + (gritCtl * 1.4) + (ringCtl * 0.5) + (airCtl * 0.3);
 			sig = (sig * drive).tanh / drive.sqrt;
 			sig = Pan2.ar(sig * env * ampCtl, (panCtl + (leanCtl * 0.3) + (twistCtl * 0.12)).clip(-1, 1));
 			Out.ar(out, sig);
@@ -259,6 +317,84 @@ s.boot;
 			Out.ar(out, sig);
 		}).add;
 
+		SynthDef(\vrb_pad, {
+			|out=0, gate=1, baseFreq=220, amp=0.1, cutoff=2600, pan=0, presence=0.0, activity=0.0, brightness=0.45, density=0.2, spread=0.2, weight=0.5|
+			var env, baseFreqCtl, ampCtl, cutoffCtl, panCtl, presenceCtl, activityCtl, brightnessCtl, densityCtl, spreadCtl, weightCtl;
+			var driftA, driftB, driftC, voiceA, voiceB, voiceC, airy, sig;
+			baseFreqCtl = Lag.kr(baseFreq.clip(40, 2400), 1.8);
+			ampCtl = Lag.kr(amp.clip(0, 1), 2.6);
+			cutoffCtl = Lag.kr(cutoff.clip(200, 12000), 2.2);
+			panCtl = Lag.kr(pan.clip(-1, 1), 2.8);
+			presenceCtl = Lag.kr(presence.clip(0, 1), 3.2);
+			activityCtl = Lag.kr(activity.clip(0, 1), 2.4);
+			brightnessCtl = Lag.kr(brightness.clip(0, 1), 3.0);
+			densityCtl = Lag.kr(density.clip(0, 1), 2.6);
+			spreadCtl = Lag.kr(spread.clip(0, 1), 2.6);
+			weightCtl = Lag.kr(weight.clip(0, 1), 3.4);
+			env = EnvGen.kr(Env.asr(1.4, 1.0, 3.8), gate: gate, doneAction: 2);
+			driftA = LFNoise2.kr(0.05 + (activityCtl * 0.12)).range(0.992, 1.008);
+			driftB = LFNoise2.kr(0.04 + (activityCtl * 0.09)).range(0.988, 1.012);
+			driftC = LFNoise2.kr(0.03 + (activityCtl * 0.07)).range(0.984, 1.016);
+			voiceA = VarSaw.ar(
+				baseFreqCtl * 0.5 * driftA,
+				0,
+				0.42 + (densityCtl * 0.18),
+				0.08 + (weightCtl * 0.05)
+			);
+			voiceB = Saw.ar(
+				baseFreqCtl * (1.0 + (spreadCtl * 0.02)) * driftB,
+				0.06 + (presenceCtl * 0.04)
+			);
+			voiceC = SinOsc.ar(
+				baseFreqCtl * (1.5 + (spreadCtl * 0.08)) * driftC,
+				0,
+				0.06 + (brightnessCtl * 0.05)
+			);
+			airy = (
+				BPF.ar(WhiteNoise.ar(0.04 + (activityCtl * 0.02)), (cutoffCtl * (0.8 + brightnessCtl)).clip(500, 10000), 0.18)
+				+ Formant.ar(
+					(baseFreqCtl * 0.5).clip(60, 900),
+					(cutoffCtl * (0.7 + brightnessCtl)).clip(280, 6200),
+					(baseFreqCtl * (1.1 + spreadCtl)).clip(120, 2200)
+				) * (0.04 + (presenceCtl * 0.06))
+			);
+			sig = voiceA + voiceB + voiceC + airy;
+			sig = LPF.ar(sig, cutoffCtl * brightnessCtl.linlin(0.0, 1.0, 0.9, 1.8));
+			sig = HPF.ar(sig, 35 + ((1.0 - weightCtl) * 30));
+			sig = Splay.ar([sig, DelayC.ar(sig, 0.05, 0.008 + (spreadCtl * 0.014))], spreadCtl.linlin(0.0, 1.0, 0.18, 0.82), ampCtl * env, panCtl);
+			Out.ar(out, LeakDC.ar(sig));
+		}).add;
+
+		SynthDef(\vrb_memory_drone, {
+			|out=0, gate=1, baseFreq=110, amp=0.08, focus=0.5, stability=0.8, tilt=0.4, presence=0.0, pan=0|
+			var env, baseFreqCtl, ampCtl, focusCtl, stabilityCtl, tiltCtl, presenceCtl, panCtl;
+			var vibrato, sub, overtone, air, sig;
+			baseFreqCtl = Lag.kr(baseFreq.clip(30, 1200), 5.0);
+			ampCtl = Lag.kr(amp.clip(0, 1), 6.0);
+			focusCtl = Lag.kr(focus.clip(0, 1), 5.2);
+			stabilityCtl = Lag.kr(stability.clip(0, 1), 6.4);
+			tiltCtl = Lag.kr(tilt.clip(0, 1), 5.4);
+			presenceCtl = Lag.kr(presence.clip(0, 1), 6.0);
+			panCtl = Lag.kr(pan.clip(-1, 1), 5.6);
+			env = EnvGen.kr(Env.asr(2.8, 1.0, 6.0), gate: gate, doneAction: 2);
+			vibrato = SinOsc.kr(0.012 + ((1.0 - stabilityCtl) * 0.05), 0, (1.0 - stabilityCtl) * 0.025, 1.0);
+			sub = SinOsc.ar(baseFreqCtl * vibrato, 0, 0.12 + (presenceCtl * 0.04));
+			overtone = (
+				VarSaw.ar(baseFreqCtl * 2.0 * vibrato, 0, 0.44 + (focusCtl * 0.16), 0.06 + (tiltCtl * 0.04))
+				+ SinOsc.ar(baseFreqCtl * (3.0 + (focusCtl * 0.45)), 0, 0.03 + (focusCtl * 0.03))
+			);
+			air = BPF.ar(
+				PinkNoise.ar(0.025 + (presenceCtl * 0.02)),
+				(baseFreqCtl * (4.0 + (tiltCtl * 4.5))).clip(220, 5400),
+				0.16
+			) * (0.2 + ((1.0 - focusCtl) * 0.35));
+			sig = sub + overtone + air;
+			sig = LPF.ar(sig, (baseFreqCtl * (9.0 + (tiltCtl * 18.0))).clip(420, 9000));
+			sig = HPF.ar(sig, 22);
+			sig = Splay.ar([sig, DelayC.ar(sig, 0.08, 0.017)], 0.32, ampCtl * env, panCtl);
+			Out.ar(out, LeakDC.ar(sig));
+		}).add;
+
 		SynthDef(\vrb_chorus, { |out=0, gate=1, inbus=0, mix=0.12, rate=0.18, depth=0.012|
 			var env, input, wetL, wetR, sig, mixCtl, rateCtl, depthCtl;
 			mixCtl = mix.clip(0, 1);
@@ -378,6 +514,30 @@ s.boot;
 			ReplaceOut.ar(out, LeakDC.ar(sig * env));
 		}).add;
 
+		SynthDef(\vrb_resonator, { |out=0, gate=1, inbus=0, mix=0.0, tune=0.42, decay=0.28, spread=0.22|
+			var env, input, mixCtl, tuneCtl, decayCtl, spreadCtl, baseFreq, combWet, ringWet, wet, sig;
+			mixCtl = mix.clip(0, 1);
+			tuneCtl = tune.clip(0, 1);
+			decayCtl = decay.clip(0, 1);
+			spreadCtl = spread.clip(0, 1);
+			env = EnvGen.kr(Env.asr(0.01, 1.0, 0.2), gate: gate, doneAction: 2);
+			input = In.ar(inbus, 2);
+			baseFreq = tuneCtl.linexp(0.0, 1.0, 90, 2600);
+			combWet = [
+				CombC.ar(input[0], 0.4, (1 / baseFreq).clip(0.0008, 0.03) * (1.0 - (spreadCtl * 0.18)), 0.2 + (decayCtl * 2.4)),
+				CombC.ar(input[1], 0.4, (1 / baseFreq).clip(0.0008, 0.03) * (1.0 + (spreadCtl * 0.22)), 0.2 + (decayCtl * 2.4))
+			];
+			ringWet = Ringz.ar(
+				Mix(input),
+				(baseFreq * [1.0 - (spreadCtl * 0.12), 1.0 + (spreadCtl * 0.16), 2.0 + (spreadCtl * 0.35)]).clip(120, 12000),
+				0.08 + (decayCtl * 0.5)
+			).sum * 0.18;
+			wet = LeakDC.ar(combWet + [ringWet, DelayC.ar(ringWet, 0.05, 0.011 + (spreadCtl * 0.012))]);
+			wet = HPF.ar(LPF.ar(wet, (baseFreq * (3.5 + (spreadCtl * 4.0))).clip(1200, 14000)), 60);
+			sig = XFade2.ar(input, wet, mixCtl.linlin(0, 1, -1, 1));
+			ReplaceOut.ar(out, LeakDC.ar(sig * env));
+		}).add;
+
 		SynthDef(\vrb_master, { |out=0, gate=1, inbus=0, drive=0.18, width=0.25, tremRate=0.0, tremDepth=0.0, output=0.9|
 			var env, input, mid, side, widthCtl, trem, sig, driveCtl;
 			widthCtl = width.clip(0, 1);
@@ -394,14 +554,36 @@ s.boot;
 			Out.ar(out, LeakDC.ar(sig * output.clip(0, 1) * env));
 		}).add;
 
+		SynthDef(\vrb_shimmer, { |out=0, gate=1, inbus=0, mix=0.0, shift=0.45, feedback=0.18, tone=0.72|
+			var env, input, mixCtl, shiftCtl, feedbackCtl, toneCtl, ratio, shifted, wet, sig;
+			mixCtl = mix.clip(0, 1);
+			shiftCtl = shift.clip(0, 1);
+			feedbackCtl = feedback.clip(0, 1);
+			toneCtl = tone.clip(0, 1);
+			env = EnvGen.kr(Env.asr(0.01, 1.0, 0.2), gate: gate, doneAction: 2);
+			input = In.ar(inbus, 2);
+			ratio = SelectX.kr(shiftCtl * 2.0, [1.0, 1.26, 1.5]);
+			shifted = PitchShift.ar(input, 0.25, ratio, 0.0, 0.015);
+			wet = CombC.ar(
+				HPF.ar(shifted, toneCtl.linexp(0.0, 1.0, 150, 1800)),
+				1.0,
+				0.16 + (feedbackCtl * 0.48),
+				0.2 + (feedbackCtl * 3.0)
+			);
+			wet = LPF.ar(wet + (shifted * 0.6), toneCtl.linexp(0.0, 1.0, 2200, 12000));
+			sig = XFade2.ar(input, wet, mixCtl.linlin(0, 1, -1, 1));
+			ReplaceOut.ar(out, LeakDC.ar(sig * env));
+		}).add;
+
 		s.sync;
 
 		~fxBus = Bus.audio(s, 2);
 		~aggroBus = Bus.audio(s, 2);
+		~resonBus = Bus.audio(s, 2);
 		~delayBus = Bus.audio(s, 2);
 		~chorusBus = Bus.audio(s, 2);
 		~verbBus = Bus.audio(s, 2);
-		~masterBus = Bus.audio(s, 2);
+		~shimmerBus = Bus.audio(s, 2);
 
 		~bodyDetected = 0;
 		~bodyTargetAmp = 0.0;
@@ -417,7 +599,11 @@ s.boot;
 			noiseMix: 0.18,
 			subMix: 0.55,
 			motion: 0.35,
-			resonance: 0.22
+			resonance: 0.22,
+			airMix: 0.14,
+			ringMix: 0.12,
+			grit: 0.18,
+			drift: 0.18
 		);
 		~poseParams = (
 			lift: 0.0,
@@ -429,6 +615,23 @@ s.boot;
 			height: 0.5,
 			lean: 0.0,
 			energy: 0.0
+		);
+		~sceneParams = (
+			padFreq: 140.0,
+			padAmp: 0.0,
+			padBrightness: 0.45,
+			padDensity: 0.2,
+			padSpread: 0.2,
+			padPan: 0.0,
+			memoryFreq: 70.0,
+			memoryAmp: 0.0,
+			memoryFocus: 0.5,
+			memoryStability: 0.8,
+			memoryTilt: 0.4,
+			memoryPan: 0.0,
+			presence: 0.0,
+			activity: 0.0,
+			weight: 0.5
 		);
 		~triggerUi = (
 			onset: (mode: 0.0, color: 0.35),
@@ -443,9 +646,11 @@ s.boot;
 			lowpass: (enabled: 0, freq: 9200.0, resonance: 0.45, mix: 1.0),
 			distortion: (enabled: 0, drive: 0.0, mix: 0.0, fold: 0.0, bias: 0.0, tone: 0.68),
 			glitch: (enabled: 0, mix: 0.0, rate: 8.0, depth: 0.0, crush: 0.0, gate: 0.0),
+			resonator: (mix: 0.0, tune: 0.42, decay: 0.28, spread: 0.22),
 			delay: (time: 0.2, feedback: 0.25, mix: 0.32, tone: 0.62),
 			chorus: (mix: 0.12, rate: 0.18, depth: 0.012),
 			reverb: (mix: 0.18, room: 0.55, damp: 0.45, tone: 0.6),
+			shimmer: (mix: 0.0, shift: 0.45, feedback: 0.18, tone: 0.72),
 			master: (drive: 0.18, width: 0.25, tremRate: 0.0, tremDepth: 0.0, output: 0.9)
 		);
 
@@ -461,6 +666,10 @@ s.boot;
 			\subMix, ~bodyUi[\subMix],
 			\motion, ~bodyUi[\motion],
 			\resonance, ~bodyUi[\resonance],
+			\airMix, ~bodyUi[\airMix],
+			\ringMix, ~bodyUi[\ringMix],
+			\grit, ~bodyUi[\grit],
+			\drift, ~bodyUi[\drift],
 			\poseLift, ~poseParams[\lift],
 			\poseSpread, ~poseParams[\spread],
 			\poseTwist, ~poseParams[\twist],
@@ -470,6 +679,29 @@ s.boot;
 			\poseHeight, ~poseParams[\height],
 			\poseLean, ~poseParams[\lean],
 			\poseEnergy, ~poseParams[\energy]
+		]);
+		~pad = Synth.after(~body, \vrb_pad, [
+			\out, ~fxBus.index,
+			\baseFreq, ~sceneParams[\padFreq],
+			\amp, ~sceneParams[\padAmp],
+			\cutoff, ~bodyParams[\cutoff],
+			\pan, ~sceneParams[\padPan],
+			\presence, ~sceneParams[\presence],
+			\activity, ~sceneParams[\activity],
+			\brightness, ~sceneParams[\padBrightness],
+			\density, ~sceneParams[\padDensity],
+			\spread, ~sceneParams[\padSpread],
+			\weight, ~sceneParams[\weight]
+		]);
+		~memory = Synth.after(~pad, \vrb_memory_drone, [
+			\out, ~fxBus.index,
+			\baseFreq, ~sceneParams[\memoryFreq],
+			\amp, ~sceneParams[\memoryAmp],
+			\focus, ~sceneParams[\memoryFocus],
+			\stability, ~sceneParams[\memoryStability],
+			\tilt, ~sceneParams[\memoryTilt],
+			\presence, ~sceneParams[\presence],
+			\pan, ~sceneParams[\memoryPan]
 		]);
 
 		~aggro = Synth.new(\vrb_aggression, [
@@ -503,8 +735,17 @@ s.boot;
 			\glitchGate, ~fxUi[\glitch][\gate]
 		], s, \addToTail);
 
-		~delay = Synth.new(\vrb_delay, [
+		~resonator = Synth.new(\vrb_resonator, [
 			\inbus, ~aggroBus.index,
+			\out, ~resonBus.index,
+			\mix, ~fxUi[\resonator][\mix],
+			\tune, ~fxUi[\resonator][\tune],
+			\decay, ~fxUi[\resonator][\decay],
+			\spread, ~fxUi[\resonator][\spread]
+		], s, \addToTail);
+
+		~delay = Synth.new(\vrb_delay, [
+			\inbus, ~resonBus.index,
 			\out, ~delayBus.index,
 			\delaytime, ~fxUi[\delay][\time],
 			\feedback, ~fxUi[\delay][\feedback],
@@ -529,8 +770,17 @@ s.boot;
 			\tone, ~fxUi[\reverb][\tone]
 		], s, \addToTail);
 
-		~master = Synth.new(\vrb_master, [
+		~shimmer = Synth.new(\vrb_shimmer, [
 			\inbus, ~verbBus.index,
+			\out, ~shimmerBus.index,
+			\mix, ~fxUi[\shimmer][\mix],
+			\shift, ~fxUi[\shimmer][\shift],
+			\feedback, ~fxUi[\shimmer][\feedback],
+			\tone, ~fxUi[\shimmer][\tone]
+		], s, \addToTail);
+
+		~master = Synth.new(\vrb_master, [
+			\inbus, ~shimmerBus.index,
 			\out, 0,
 			\drive, ~fxUi[\master][\drive],
 			\width, ~fxUi[\master][\width],
@@ -579,6 +829,14 @@ s.boot;
 					\glitchGate, ~fxUi[\glitch][\gate]
 				);
 			};
+			if(~resonator.notNil) {
+				~resonator.set(
+					\mix, ~fxUi[\resonator][\mix],
+					\tune, ~fxUi[\resonator][\tune],
+					\decay, ~fxUi[\resonator][\decay],
+					\spread, ~fxUi[\resonator][\spread]
+				);
+			};
 			if(~delay.notNil) {
 				~delay.set(
 					\delaytime, ~fxUi[\delay][\time],
@@ -600,6 +858,14 @@ s.boot;
 					\room, ~fxUi[\reverb][\room],
 					\damp, ~fxUi[\reverb][\damp],
 					\tone, ~fxUi[\reverb][\tone]
+				);
+			};
+			if(~shimmer.notNil) {
+				~shimmer.set(
+					\mix, ~fxUi[\shimmer][\mix],
+					\shift, ~fxUi[\shimmer][\shift],
+					\feedback, ~fxUi[\shimmer][\feedback],
+					\tone, ~fxUi[\shimmer][\tone]
 				);
 			};
 			if(~master.notNil) {
@@ -628,6 +894,10 @@ s.boot;
 					\subMix, ~bodyUi[\subMix],
 					\motion, ~bodyUi[\motion],
 					\resonance, ~bodyUi[\resonance],
+					\airMix, ~bodyUi[\airMix],
+					\ringMix, ~bodyUi[\ringMix],
+					\grit, ~bodyUi[\grit],
+					\drift, ~bodyUi[\drift],
 					\poseLift, ~poseParams[\lift],
 					\poseSpread, ~poseParams[\spread],
 					\poseTwist, ~poseParams[\twist],
@@ -637,6 +907,34 @@ s.boot;
 					\poseHeight, ~poseParams[\height],
 					\poseLean, ~poseParams[\lean],
 					\poseEnergy, ~poseParams[\energy]
+				);
+			};
+		};
+
+		setSceneState = {
+			if(~pad.notNil) {
+				~pad.set(
+					\baseFreq, ~sceneParams[\padFreq],
+					\amp, ~sceneParams[\padAmp],
+					\cutoff, (~bodyParams[\cutoff] * 1.1).clip(220, 12000),
+					\pan, ~sceneParams[\padPan],
+					\presence, ~sceneParams[\presence],
+					\activity, ~sceneParams[\activity],
+					\brightness, ~sceneParams[\padBrightness],
+					\density, ~sceneParams[\padDensity],
+					\spread, ~sceneParams[\padSpread],
+					\weight, ~sceneParams[\weight]
+				);
+			};
+			if(~memory.notNil) {
+				~memory.set(
+					\baseFreq, ~sceneParams[\memoryFreq],
+					\amp, ~sceneParams[\memoryAmp],
+					\focus, ~sceneParams[\memoryFocus],
+					\stability, ~sceneParams[\memoryStability],
+					\tilt, ~sceneParams[\memoryTilt],
+					\presence, ~sceneParams[\presence],
+					\pan, ~sceneParams[\memoryPan]
 				);
 			};
 		};
@@ -687,7 +985,7 @@ s.boot;
 		}, '/synth/body', recvPort: NetAddr.langPort);
 
 		OSCdef(\uiBody, { |msg|
-			var values, mode, texture, noiseMix, subMix, motion, resonance;
+			var values, mode, texture, noiseMix, subMix, motion, resonance, airMix, ringMix, grit, drift;
 			values = makeNamedValueParser.(msg);
 			mode = values.at(\mode);
 			texture = values.at(\texture);
@@ -695,12 +993,20 @@ s.boot;
 			subMix = values.at(\subMix);
 			motion = values.at(\motion);
 			resonance = values.at(\resonance);
-			if(mode.notNil) { ~bodyUi[\mode] = mode.asFloat.clip(0, 3) };
+			airMix = values.at(\airMix);
+			ringMix = values.at(\ringMix);
+			grit = values.at(\grit);
+			drift = values.at(\drift);
+			if(mode.notNil) { ~bodyUi[\mode] = mode.asFloat.clip(0, 5) };
 			if(texture.notNil) { ~bodyUi[\texture] = texture.asFloat.clip(0, 1) };
 			if(noiseMix.notNil) { ~bodyUi[\noiseMix] = noiseMix.asFloat.clip(0, 1) };
 			if(subMix.notNil) { ~bodyUi[\subMix] = subMix.asFloat.clip(0, 1) };
 			if(motion.notNil) { ~bodyUi[\motion] = motion.asFloat.clip(0, 1) };
 			if(resonance.notNil) { ~bodyUi[\resonance] = resonance.asFloat.clip(0.08, 0.95) };
+			if(airMix.notNil) { ~bodyUi[\airMix] = airMix.asFloat.clip(0, 1) };
+			if(ringMix.notNil) { ~bodyUi[\ringMix] = ringMix.asFloat.clip(0, 1) };
+			if(grit.notNil) { ~bodyUi[\grit] = grit.asFloat.clip(0, 1) };
+			if(drift.notNil) { ~bodyUi[\drift] = drift.asFloat.clip(0, 1) };
 			setBodyState.();
 		}, '/ui/body', recvPort: NetAddr.langPort);
 
@@ -727,6 +1033,45 @@ s.boot;
 			if(energy.notNil) { ~poseParams[\energy] = energy.asFloat.clip(0, 1) };
 			setBodyState.();
 		}, '/synth/pose', recvPort: NetAddr.langPort);
+
+		OSCdef(\sceneBody, { |msg|
+			var values;
+			var padFreq, padAmp, padBrightness, padDensity, padSpread, padPan;
+			var memoryFreq, memoryAmp, memoryFocus, memoryStability, memoryTilt, memoryPan;
+			var presence, activity, weight;
+			values = makeNamedValueParser.(msg);
+			padFreq = values.at(\padFreq);
+			padAmp = values.at(\padAmp);
+			padBrightness = values.at(\padBrightness);
+			padDensity = values.at(\padDensity);
+			padSpread = values.at(\padSpread);
+			padPan = values.at(\padPan);
+			memoryFreq = values.at(\memoryFreq);
+			memoryAmp = values.at(\memoryAmp);
+			memoryFocus = values.at(\memoryFocus);
+			memoryStability = values.at(\memoryStability);
+			memoryTilt = values.at(\memoryTilt);
+			memoryPan = values.at(\memoryPan);
+			presence = values.at(\presence);
+			activity = values.at(\activity);
+			weight = values.at(\weight);
+			if(padFreq.notNil) { ~sceneParams[\padFreq] = padFreq.asFloat.clip(40, 2400) };
+			if(padAmp.notNil) { ~sceneParams[\padAmp] = padAmp.asFloat.clip(0, 1) };
+			if(padBrightness.notNil) { ~sceneParams[\padBrightness] = padBrightness.asFloat.clip(0, 1) };
+			if(padDensity.notNil) { ~sceneParams[\padDensity] = padDensity.asFloat.clip(0, 1) };
+			if(padSpread.notNil) { ~sceneParams[\padSpread] = padSpread.asFloat.clip(0, 1) };
+			if(padPan.notNil) { ~sceneParams[\padPan] = padPan.asFloat.clip(-1, 1) };
+			if(memoryFreq.notNil) { ~sceneParams[\memoryFreq] = memoryFreq.asFloat.clip(30, 1200) };
+			if(memoryAmp.notNil) { ~sceneParams[\memoryAmp] = memoryAmp.asFloat.clip(0, 1) };
+			if(memoryFocus.notNil) { ~sceneParams[\memoryFocus] = memoryFocus.asFloat.clip(0, 1) };
+			if(memoryStability.notNil) { ~sceneParams[\memoryStability] = memoryStability.asFloat.clip(0, 1) };
+			if(memoryTilt.notNil) { ~sceneParams[\memoryTilt] = memoryTilt.asFloat.clip(0, 1) };
+			if(memoryPan.notNil) { ~sceneParams[\memoryPan] = memoryPan.asFloat.clip(-1, 1) };
+			if(presence.notNil) { ~sceneParams[\presence] = presence.asFloat.clip(0, 1) };
+			if(activity.notNil) { ~sceneParams[\activity] = activity.asFloat.clip(0, 1) };
+			if(weight.notNil) { ~sceneParams[\weight] = weight.asFloat.clip(0, 1) };
+			setSceneState.();
+		}, '/synth/scene', recvPort: NetAddr.langPort);
 
 		OSCdef(\reverbMix, { |msg|
 			~fxUi[\reverb][\mix] = firstValue.(msg, ~fxUi[\reverb][\mix]).clip(0, 1);
@@ -844,6 +1189,20 @@ s.boot;
 			refreshFxState.();
 		}, '/ui/fx/glitch', recvPort: NetAddr.langPort);
 
+		OSCdef(\uiResonator, { |msg|
+			var values, mix, tune, decay, spread;
+			values = makeNamedValueParser.(msg);
+			mix = values.at(\mix);
+			tune = values.at(\tune);
+			decay = values.at(\decay);
+			spread = values.at(\spread);
+			if(mix.notNil) { ~fxUi[\resonator][\mix] = mix.asFloat.clip(0, 1) };
+			if(tune.notNil) { ~fxUi[\resonator][\tune] = tune.asFloat.clip(0, 1) };
+			if(decay.notNil) { ~fxUi[\resonator][\decay] = decay.asFloat.clip(0, 1) };
+			if(spread.notNil) { ~fxUi[\resonator][\spread] = spread.asFloat.clip(0, 1) };
+			refreshFxState.();
+		}, '/ui/fx/resonator', recvPort: NetAddr.langPort);
+
 		OSCdef(\uiChorus, { |msg|
 			var values, mix, rate, depth;
 			values = makeNamedValueParser.(msg);
@@ -869,6 +1228,20 @@ s.boot;
 			if(tone.notNil) { ~fxUi[\reverb][\tone] = tone.asFloat.clip(0, 1) };
 			refreshFxState.();
 		}, '/ui/fx/reverb', recvPort: NetAddr.langPort);
+
+		OSCdef(\uiShimmer, { |msg|
+			var values, mix, shift, feedback, tone;
+			values = makeNamedValueParser.(msg);
+			mix = values.at(\mix);
+			shift = values.at(\shift);
+			feedback = values.at(\feedback);
+			tone = values.at(\tone);
+			if(mix.notNil) { ~fxUi[\shimmer][\mix] = mix.asFloat.clip(0, 1) };
+			if(shift.notNil) { ~fxUi[\shimmer][\shift] = shift.asFloat.clip(0, 1) };
+			if(feedback.notNil) { ~fxUi[\shimmer][\feedback] = feedback.asFloat.clip(0, 1) };
+			if(tone.notNil) { ~fxUi[\shimmer][\tone] = tone.asFloat.clip(0, 1) };
+			refreshFxState.();
+		}, '/ui/fx/shimmer', recvPort: NetAddr.langPort);
 
 		OSCdef(\uiMaster, { |msg|
 			var values, drive, width, tremRate, tremDepth, output;
@@ -972,6 +1345,7 @@ s.boot;
 			if(OSCdef(\body).notNil) { OSCdef(\body).free };
 			if(OSCdef(\uiBody).notNil) { OSCdef(\uiBody).free };
 			if(OSCdef(\poseBody).notNil) { OSCdef(\poseBody).free };
+			if(OSCdef(\sceneBody).notNil) { OSCdef(\sceneBody).free };
 			if(OSCdef(\reverbMix).notNil) { OSCdef(\reverbMix).free };
 			if(OSCdef(\reverbRoom).notNil) { OSCdef(\reverbRoom).free };
 			if(OSCdef(\delayTime).notNil) { OSCdef(\delayTime).free };
@@ -981,9 +1355,11 @@ s.boot;
 			if(OSCdef(\uiLowpass).notNil) { OSCdef(\uiLowpass).free };
 			if(OSCdef(\uiDistortion).notNil) { OSCdef(\uiDistortion).free };
 			if(OSCdef(\uiGlitch).notNil) { OSCdef(\uiGlitch).free };
+			if(OSCdef(\uiResonator).notNil) { OSCdef(\uiResonator).free };
 			if(OSCdef(\uiDelay).notNil) { OSCdef(\uiDelay).free };
 			if(OSCdef(\uiChorus).notNil) { OSCdef(\uiChorus).free };
 			if(OSCdef(\uiReverb).notNil) { OSCdef(\uiReverb).free };
+			if(OSCdef(\uiShimmer).notNil) { OSCdef(\uiShimmer).free };
 			if(OSCdef(\uiMaster).notNil) { OSCdef(\uiMaster).free };
 			if(OSCdef(\uiTriggerOnset).notNil) { OSCdef(\uiTriggerOnset).free };
 			if(OSCdef(\uiTriggerImpact).notNil) { OSCdef(\uiTriggerImpact).free };
@@ -997,21 +1373,27 @@ s.boot;
 			if(OSCdef(\flowBurst).notNil) { OSCdef(\flowBurst).free };
 			if(OSCdef(\detected).notNil) { OSCdef(\detected).free };
 			if(~body.notNil) { ~body.set(\gate, 0) };
+			if(~pad.notNil) { ~pad.set(\gate, 0) };
+			if(~memory.notNil) { ~memory.set(\gate, 0) };
 			if(~aggro.notNil) { ~aggro.set(\gate, 0) };
+			if(~resonator.notNil) { ~resonator.set(\gate, 0) };
 			if(~delay.notNil) { ~delay.set(\gate, 0) };
 			if(~chorus.notNil) { ~chorus.set(\gate, 0) };
 			if(~reverb.notNil) { ~reverb.set(\gate, 0) };
+			if(~shimmer.notNil) { ~shimmer.set(\gate, 0) };
 			if(~master.notNil) { ~master.set(\gate, 0) };
-			if(~masterBus.notNil) { ~masterBus.free };
+			if(~shimmerBus.notNil) { ~shimmerBus.free };
 			if(~verbBus.notNil) { ~verbBus.free };
 			if(~chorusBus.notNil) { ~chorusBus.free };
 			if(~delayBus.notNil) { ~delayBus.free };
+			if(~resonBus.notNil) { ~resonBus.free };
 			if(~aggroBus.notNil) { ~aggroBus.free };
 			if(~fxBus.notNil) { ~fxBus.free };
 		};
 
 		refreshFxState.();
 		setBodyState.();
+		setSceneState.();
 		"virtual-real-body: OSCdefs registered".postln;
 	};
 }.value;
