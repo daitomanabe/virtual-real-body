@@ -1,20 +1,13 @@
 from __future__ import annotations
 
 import argparse
-from time import sleep
-
 import numpy as np
 
 from analyzers import (
-    DepthAnalyzer,
     EventAnalyzer,
     MediaPipeAnalyzer,
     OpticalFlowAnalyzer,
     ParticleAnalyzer,
-    SparseFlowAnalyzer,
-    YOLODetectAnalyzer,
-    YOLOPoseAnalyzer,
-    YOLOSegAnalyzer,
 )
 from config import settings
 from core.engine import AnalysisEngine
@@ -37,13 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def build_default_analyzers() -> list[object]:
     return [
-        YOLODetectAnalyzer(),
-        YOLOPoseAnalyzer(),
-        YOLOSegAnalyzer(),
         OpticalFlowAnalyzer(),
-        SparseFlowAnalyzer(),
         MediaPipeAnalyzer(),
-        DepthAnalyzer(),
         EventAnalyzer(),
         ParticleAnalyzer(),
     ]
@@ -66,10 +54,14 @@ def _run_camera(engine: AnalysisEngine, camera_index: int, frame_limit: int) -> 
     capture = cv2.VideoCapture(camera_index)
     if not capture.isOpened():
         raise RuntimeError(f"Failed to open camera index {camera_index}.")
+    capture.set(cv2.CAP_PROP_FRAME_WIDTH, settings.camera_width)
+    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.camera_height)
+    capture.set(cv2.CAP_PROP_FPS, settings.target_fps)
+    if hasattr(cv2, "CAP_PROP_BUFFERSIZE"):
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
     try:
         frame_id = 0
-        frame_interval = 1.0 / max(settings.target_fps, 1)
         while True:
             ok, frame_bgr = capture.read()
             if not ok:
@@ -80,7 +72,6 @@ def _run_camera(engine: AnalysisEngine, camera_index: int, frame_limit: int) -> 
 
             if frame_limit > 0 and frame_id >= frame_limit:
                 break
-            sleep(frame_interval)
     finally:
         capture.release()
 

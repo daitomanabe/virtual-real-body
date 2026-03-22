@@ -15,6 +15,7 @@ from transport.zmq_publisher import ZMQPublisher
 class AnalyzerRuntime:
     analyzer: Analyzer
     frames: deque[float]
+    last_started_at: float = 0.0
 
 
 class AnalysisEngine:
@@ -28,7 +29,7 @@ class AnalysisEngine:
         self.camera_index = settings.camera_index if camera_index is None else camera_index
         self.zmq_publisher = zmq_publisher or ZMQPublisher(settings.zmq_bind)
         self.osc_broadcaster = osc_broadcaster or OSCBroadcaster(settings.osc_targets)
-        self.inline_analyzers: list[Analyzer] = []
+        self.inline_analyzers: list[AnalyzerRuntime] = []
         self.meta_analyzers: list[Analyzer] = []
         self._fps_windows: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=120))
         self._last_fps_publish = monotonic()
@@ -36,7 +37,7 @@ class AnalysisEngine:
             self.register_analyzer(analyzer)
 
     def describe(self) -> str:
-        names = [analyzer.name for analyzer in self.inline_analyzers + self.meta_analyzers]
+        names = [runtime.analyzer.name for runtime in self.inline_analyzers] + [analyzer.name for analyzer in self.meta_analyzers]
         return (
             f"AnalysisEngine(camera_index={self.camera_index}, "
             f"zmq_bind={self.zmq_publisher.bind_address}, analyzers={names})"
@@ -44,15 +45,32 @@ class AnalysisEngine:
 
     def register_analyzer(self, analyzer: Analyzer) -> None:
         target = self.meta_analyzers if analyzer.name in {"event", "particle.state"} else self.inline_analyzers
-        target.append(analyzer)
+        if target is self.inline_analyzers:
+            target.append(AnalyzerRuntime(analyzer=analyzer, frames=deque(maxlen=120)))
+        else:
+            target.append(analyzer)
 
     def process_frame(self, frame_bgr: object, frame_id: int) -> list[AnalysisResult]:
         results: list[AnalysisResult] = []
-        for analyzer in self.inline_analyzers:
-            result = analyzer.process(frame_bgr, frame_id)
+        now = monotonic()
+        for runtime in self.inline_analyzers:
+            if not self._should_run(runtime, now):
+                continue
+            runtime.last_started_at = now
+            result = runtime.analyzer.process(frame_bgr, frame_id)
             results.append(result)
             self._on_result(result)
         return results
+
+    @staticmethod
+    def _should_run(runtime: AnalyzerRuntime, now: float) -> bool:
+        target_fps = runtime.analyzer.target_fps
+        if target_fps is None or target_fps <= 0:
+            return True
+        if runtime.last_started_at == 0.0:
+            return True
+        interval = 1.0 / target_fps
+        return now - runtime.last_started_at >= interval
 
     def _on_result(self, result: AnalysisResult) -> None:
         self.zmq_publisher.publish(result.topic, result.as_payload())
@@ -69,7 +87,7 @@ class AnalysisEngine:
 
     def _collect_osc_messages(self, result: AnalysisResult) -> list[tuple[str, list[float]]]:
         messages: list[tuple[str, list[float]]] = []
-        analyzers = self.inline_analyzers + self.meta_analyzers
+        analyzers = [runtime.analyzer for runtime in self.inline_analyzers] + self.meta_analyzers
         for analyzer in analyzers:
             if analyzer.name == result.analyzer:
                 messages.extend(analyzer.osc_messages(result))

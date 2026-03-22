@@ -12,9 +12,17 @@ OSC_SC_PORT = 57120
 YOLO_DEVICE = "mps"
 CAMERA_INDEX = 0
 TARGET_FPS = 60
+CAMERA_WIDTH = 1280
+CAMERA_HEIGHT = 720
 FLOW_FPS = 30
 DEPTH_FPS = 10
 FPS_PUBLISH_INTERVAL = 10.0
+POSE_FPS = 45
+SPARSE_FLOW_FPS = 20
+FLOW_MAX_DIM = 320
+MEDIAPIPE_MODEL_COMPLEXITY = 1
+MEDIAPIPE_MIN_DETECTION_CONFIDENCE = 0.55
+MEDIAPIPE_MIN_TRACKING_CONFIDENCE = 0.55
 
 SC_FREQ_HIGH = 1200.0
 SC_FREQ_LOW = 60.0
@@ -103,6 +111,15 @@ class Settings:
     yolo_device: str = YOLO_DEVICE
     camera_index: int = CAMERA_INDEX
     target_fps: int = TARGET_FPS
+    camera_width: int = CAMERA_WIDTH
+    camera_height: int = CAMERA_HEIGHT
+    pose_fps: int = POSE_FPS
+    flow_fps: int = FLOW_FPS
+    sparse_flow_fps: int = SPARSE_FLOW_FPS
+    flow_max_dim: int = FLOW_MAX_DIM
+    mediapipe_model_complexity: int = MEDIAPIPE_MODEL_COMPLEXITY
+    mediapipe_min_detection_confidence: float = MEDIAPIPE_MIN_DETECTION_CONFIDENCE
+    mediapipe_min_tracking_confidence: float = MEDIAPIPE_MIN_TRACKING_CONFIDENCE
 
 
 settings = Settings()

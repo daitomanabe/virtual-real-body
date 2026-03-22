@@ -28,6 +28,9 @@ class ParticleAnalyzer(Analyzer):
             persons = result.data.get("persons", [])
             if persons:
                 self._pose_com = list(persons[0].get("com", self._pose_com))
+        elif result.analyzer == "mp.pose":
+            com = result.data.get("com", [self._pose_com[0], self._pose_com[1], 0.0])
+            self._pose_com = [float(com[0]), float(com[1])]
         elif result.analyzer == "flow.dense":
             self._flow_energy = float(result.data.get("energy", 0.0))
             self._flow_direction = float(result.data.get("direction", 0.0))

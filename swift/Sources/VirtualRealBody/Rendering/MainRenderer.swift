@@ -11,6 +11,10 @@ private enum VirtualBodyRenderMode: UInt32 {
     case ribbons = 3
     case swarm = 4
     case prism = 5
+    case aurora = 6
+    case sonar = 7
+    case glitch = 8
+    case eclipse = 9
 
     var label: String {
         switch self {
@@ -20,6 +24,10 @@ private enum VirtualBodyRenderMode: UInt32 {
         case .ribbons: "ribbons"
         case .swarm: "swarm"
         case .prism: "prism"
+        case .aurora: "aurora"
+        case .sonar: "sonar"
+        case .glitch: "glitch"
+        case .eclipse: "eclipse"
         }
     }
 
@@ -31,6 +39,10 @@ private enum VirtualBodyRenderMode: UInt32 {
         case "3": .ribbons
         case "4": .swarm
         case "5": .prism
+        case "6": .aurora
+        case "7": .sonar
+        case "8": .glitch
+        case "9": .eclipse
         default: nil
         }
     }
@@ -318,6 +330,8 @@ final class MainRenderer: MetalViewRenderer {
             return SIMD4<Float>(0, 0, 1, 0)
         case .prism:
             return SIMD4<Float>(0, 0, 0, 1)
+        case .aurora, .sonar, .glitch, .eclipse:
+            return .zero
         }
     }
 

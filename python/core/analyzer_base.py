@@ -32,6 +32,7 @@ class Analyzer(ABC):
     name: str = ""
     zmq_topic: bytes = b""
     threaded: bool = False
+    target_fps: float | None = None
 
     @abstractmethod
     def process(self, frame_bgr: FrameLike, frame_id: int) -> AnalysisResult:

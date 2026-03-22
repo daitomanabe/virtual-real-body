@@ -55,13 +55,19 @@ class EventAnalyzer(Analyzer):
             if persons:
                 self.pose_speed = float(persons[0].get("speed", 0.0))
                 self.com = list(persons[0].get("com", self.com))
+        elif result.analyzer == "mp.pose":
+            self.detected = bool(result.detected)
+            self.pose_speed = float(result.data.get("speed_norm", self.pose_speed))
+            com = result.data.get("com", [self.com[0], self.com[1], 0.0])
+            self.com = [float(com[0]), float(com[1])]
+            self.depth_com = float(result.data.get("pseudo_depth", self.depth_com))
         elif result.analyzer == "flow.dense":
             self.flow_energy = float(result.data.get("energy", 0.0))
             self.flow_direction = float(result.data.get("direction", 0.0))
         elif result.analyzer == "depth.map":
             self.depth_com = float(result.data.get("com_depth", self.depth_com))
 
-        if result.analyzer not in {"yolo.pose", "flow.dense", "depth.map"}:
+        if result.analyzer not in {"yolo.pose", "mp.pose", "flow.dense", "depth.map"}:
             return []
 
         accel = max(self.pose_speed - self.prev_pose_speed, 0.0)

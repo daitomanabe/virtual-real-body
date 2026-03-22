@@ -23,17 +23,13 @@ The repository is public at `https://github.com/daitomanabe/virtual-real-body` a
   - ZMQ PUB `tcp://*:5555`
   - OSC `127.0.0.1:9000` and `127.0.0.1:57120`
 - Analyzer set:
-  - `yolo.detect`
-  - `yolo.pose`
-  - `yolo.seg`
-  - `flow.dense`
-  - `flow.sparse`
   - `mp.pose`
-  - `depth.map`
+  - `flow.dense`
   - `event`
   - `particle.state`
+  - Optional / experimental: `flow.sparse`, `yolo.detect`, `yolo.pose`, `yolo.seg`, `depth.map`
 
-`EventAnalyzer` converts pose, flow, and depth state into both continuous OSC controls such as `/synth/body` and `/fx/*`, plus trigger events such as `/trigger/motion_onset` and `/trigger/impact`.
+The default M5-oriented realtime profile prioritizes MediaPipe pose plus dense optical flow, then derives event and particle state from those streams to keep latency low while preserving performer-reactive control.
 
 ### Swift renderer
 
@@ -51,6 +47,8 @@ The renderer creates two offscreen passes:
 
 Those passes are combined in `Compositor.metal` into the final side-by-side output.
 
+The virtual body renderer now exposes ten keyboard-selectable looks: `0` auto, `1` lattice, `2` membrane, `3` ribbons, `4` swarm, `5` prism, `6` aurora, `7` sonar, `8` glitch, and `9` eclipse.
+
 The virtual body now has five visual behavior families driven by analysis input:
 
 - `lattice` skeleton and joint energy
@@ -59,7 +57,7 @@ The virtual body now has five visual behavior families driven by analysis input:
 - `swarm` particle emitter body
 - `prism` quadrant / depth shards
 
-Press `0` for auto mode, or `1` to `5` to lock one family while the renderer is running.
+Press `0` for auto mode, or `1` to `9` to lock one look while the renderer is running.
 
 ### SuperCollider receiver
 
@@ -128,6 +126,8 @@ Run the live pipeline:
 cd python
 python3 main.py
 ```
+
+The default Python runtime is tuned for Apple Silicon realtime use: MediaPipe pose runs at a higher cadence than dense optical flow, camera buffering is reduced, and the engine skips analyzer work until each analyzer's target FPS is due.
 
 ### 2. Start the Swift renderer
 

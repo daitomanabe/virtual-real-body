@@ -101,6 +101,12 @@ float vrbGrid(float2 uv, float2 resolution) {
     return max(major * 0.55, minor * 0.25);
 }
 
+float vrbHash21(float2 p) {
+    p = fract(p * float2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+}
+
 float vrbJointMetric(float2 uv, float2 joint, float radius, float2 resolution) {
     float2 centered = vrbAspectUV(uv, resolution);
     float2 point = vrbAspectUV(joint, resolution);
@@ -248,6 +254,66 @@ float4 vrbPrismLayer(float2 uv, float2 aspectUV, constant VirtualBodyUniform &un
     float3 color = mix(float3(0.24, 0.16, 0.5), float3(0.72, 0.88, 1.0), sliceA);
     color += float3(0.22, 0.08, 0.32) * sliceB;
     return float4(color * alpha, alpha);
+}
+
+float4 vrbAuroraLayer(float2 uv, float2 aspectUV, constant VirtualBodyUniform &uniforms) {
+    float2 center = vrbAspectUV(uniforms.com, uniforms.resolution);
+    float flow = dot(aspectUV - center, normalize(float2(uniforms.flowVector.x + 0.001, uniforms.flowVector.y + 0.001)));
+    float curtain = 0.5 + 0.5 * sin((aspectUV.y * 12.0) + (flow * 8.0) - uniforms.time * (1.2 + uniforms.analysis.w * 2.0));
+    float drift = fbm(float3(aspectUV * 2.8 + float2(0.0, uniforms.time * 0.12), uniforms.time * 0.08));
+    float falloff = 1.0 - smoothstep(0.2, 1.25, distance(aspectUV, center) + abs(flow) * 0.22);
+    float alpha = saturate((curtain * 0.5 + drift * 0.45) * falloff);
+    float3 color = mix(float3(0.08, 0.9, 0.62), float3(0.48, 0.24, 1.0), curtain);
+    color += float3(0.12, 0.35, 0.85) * drift;
+    return float4(color * alpha, alpha);
+}
+
+float4 vrbSonarLayer(float2 aspectUV, constant VirtualBodyUniform &uniforms) {
+    float2 center = vrbAspectUV(uniforms.com, uniforms.resolution);
+    float dist = distance(aspectUV, center);
+    float pulse = fract(dist * (8.0 + uniforms.analysis.z * 18.0) - uniforms.time * (0.9 + uniforms.analysis.w * 2.8));
+    float ring = smoothstep(0.04, 0.0, abs(pulse - 0.5));
+    float sweepAngle = uniforms.time * 0.85 + uniforms.analysis.w * 5.0;
+    float2 sweepDirection = float2(cos(sweepAngle), sin(sweepAngle));
+    float beam = pow(saturate(dot(normalize(aspectUV - center + 0.0001), sweepDirection)), 24.0);
+    float gridPulse = 0.5 + 0.5 * sin((aspectUV.x + aspectUV.y) * 22.0 - uniforms.time * 4.0);
+    float alpha = saturate(ring * 0.7 + beam * 0.38 + gridPulse * 0.08);
+    float3 color = mix(float3(0.0, 0.85, 0.78), float3(0.5, 1.0, 0.92), beam);
+    color += float3(0.0, 0.15, 0.12) * gridPulse;
+    return float4(color * alpha, alpha);
+}
+
+float4 vrbGlitchLayer(float2 uv, float2 aspectUV, constant VirtualBodyUniform &uniforms) {
+    float stripeIndex = floor(uv.y * 96.0);
+    float glitchSeed = vrbHash21(float2(stripeIndex, floor(uniforms.time * 7.0)));
+    float stripeMask = step(0.78, glitchSeed);
+    float offset = (glitchSeed - 0.5) * (0.18 + uniforms.analysis.w * 0.35) * stripeMask;
+    float displacedNoise = fbm(float3(float2(aspectUV.x + offset, aspectUV.y) * 5.2, uniforms.time * 0.2));
+    float shards = smoothstep(0.48, 0.82, displacedNoise);
+    float scan = 0.5 + 0.5 * sin((uv.y * 420.0) - uniforms.time * 18.0);
+    float alpha = saturate(shards * stripeMask * (0.4 + scan * 0.5));
+    float3 color = float3(
+        shards,
+        smoothstep(0.35, 0.9, displacedNoise + 0.18),
+        smoothstep(0.2, 0.78, displacedNoise + 0.33)
+    );
+    color *= float3(1.0, 0.42 + scan * 0.4, 0.9);
+    return float4(color * alpha, alpha);
+}
+
+float4 vrbEclipseLayer(float2 uv, float2 aspectUV, constant VirtualBodyUniform &uniforms) {
+    float2 center = vrbAspectUV(uniforms.com, uniforms.resolution);
+    float dist = distance(aspectUV, center);
+    float radius = 0.18 + uniforms.analysis.x * 0.24;
+    float umbra = 1.0 - smoothstep(radius * 0.72, radius, dist);
+    float corona = stroke(dist, radius * 1.05, 0.08 + uniforms.analysis.w * 0.04);
+    float rays = pow(saturate(0.5 + 0.5 * cos(atan2(aspectUV.y - center.y, aspectUV.x - center.x) * 14.0 - uniforms.time * 1.4)), 2.0);
+    float halo = (1.0 - smoothstep(radius, radius * 2.2, dist)) * rays;
+    float vignette = smoothstep(1.45, 0.25, distance(aspectUV, float2(0.0)));
+    float alpha = saturate(corona * 0.82 + halo * 0.36 + umbra * 0.22);
+    float3 color = mix(float3(1.0, 0.46, 0.18), float3(0.48, 0.76, 1.0), uniforms.analysis.x);
+    color = color * (corona + halo * 0.8) + float3(0.02, 0.03, 0.06) * umbra;
+    return float4(color * alpha * vignette, alpha);
 }
 
 float4 vrbVelocityOverlay(float2 uv, constant JointUniform *joints, constant VirtualBodyUniform& uniforms) {
@@ -416,10 +482,18 @@ fragment float4 virtualBodyFragment(
     float4 ribbons = vrbRibbonLayer(aspectUV, joints, uniforms);
     float4 swarm = vrbSwarmLayer(aspectUV, particlePoints, uniforms);
     float4 prism = vrbPrismLayer(uv, aspectUV, uniforms);
+    float4 aurora = vrbAuroraLayer(uv, aspectUV, uniforms);
+    float4 sonar = vrbSonarLayer(aspectUV, uniforms);
+    float4 glitch = vrbGlitchLayer(uv, aspectUV, uniforms);
+    float4 eclipse = vrbEclipseLayer(uv, aspectUV, uniforms);
     float latticeWeight = uniforms.renderMode == 1u
         ? 1.0
         : saturate(1.0 - max(max(uniforms.styleMix.x, uniforms.styleMix.y), max(uniforms.styleMix.z, uniforms.styleMix.w)) * 0.72);
     latticeWeight = uniforms.renderMode == 0u ? max(latticeWeight, 0.3 + uniforms.analysis.z * 0.3) : latticeWeight;
+    float auroraWeight = uniforms.renderMode == 6u ? 1.0 : (uniforms.renderMode == 0u ? saturate(uniforms.analysis.w * 0.35 + uniforms.analysis.x * 0.2) : 0.0);
+    float sonarWeight = uniforms.renderMode == 7u ? 1.0 : (uniforms.renderMode == 0u ? saturate(uniforms.analysis.z * 0.28 + uniforms.analysis.w * 0.18) : 0.0);
+    float glitchWeight = uniforms.renderMode == 8u ? 1.0 : (uniforms.renderMode == 0u ? saturate(uniforms.analysis.w * 0.26) : 0.0);
+    float eclipseWeight = uniforms.renderMode == 9u ? 1.0 : (uniforms.renderMode == 0u ? saturate(abs(uniforms.analysis.x - 0.5) * 0.55 + max(uniforms.quadrants.x, uniforms.quadrants.z) * 0.22) : 0.0);
 
     float3 color = background;
     color = mix(color, color + boneColor * latticeWeight, saturate(boneMask * latticeWeight));
@@ -429,6 +503,10 @@ fragment float4 virtualBodyFragment(
     color = mix(color, color + ribbons.rgb, ribbons.a * uniforms.styleMix.y);
     color = mix(color, color + swarm.rgb, swarm.a * uniforms.styleMix.z);
     color = mix(color, color + prism.rgb, prism.a * uniforms.styleMix.w);
+    color = mix(color, color + aurora.rgb, aurora.a * auroraWeight);
+    color = mix(color, color + sonar.rgb, sonar.a * sonarWeight);
+    color = mix(color, color + glitch.rgb, glitch.a * glitchWeight);
+    color = mix(color, color + eclipse.rgb, eclipse.a * eclipseWeight);
     color += field * (0.02 + uniforms.analysis.w * 0.03);
 
     return float4(saturate(color), 1.0);

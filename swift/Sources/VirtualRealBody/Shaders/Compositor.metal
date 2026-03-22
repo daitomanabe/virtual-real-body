@@ -52,6 +52,10 @@ float4 vrbSamplePanel(texture2d<float> texture, sampler s, float2 uv) {
     return texture.sample(s, uv);
 }
 
+float vrbCompositorNoise(float2 uv) {
+    return fract(sin(dot(uv, float2(12.9898, 78.233))) * 43758.5453);
+}
+
 fragment float4 compositorFragment(
     RasterizerData in [[stage_in]],
     texture2d<float> leftTexture [[texture(0)]],
@@ -68,6 +72,22 @@ fragment float4 compositorFragment(
     float4 color = leftPanel
         ? vrbSamplePanel(leftTexture, texSampler, panelUV)
         : vrbSamplePanel(rightTexture, texSampler, panelUV);
+
+    float2 chromaOffset = float2((leftPanel ? -1.0 : 1.0) * 0.003, 0.0);
+    float red = (leftPanel
+        ? vrbSamplePanel(leftTexture, texSampler, clamp(panelUV + chromaOffset, 0.0, 1.0))
+        : vrbSamplePanel(rightTexture, texSampler, clamp(panelUV + chromaOffset, 0.0, 1.0))).r;
+    float blue = (leftPanel
+        ? vrbSamplePanel(leftTexture, texSampler, clamp(panelUV - chromaOffset, 0.0, 1.0))
+        : vrbSamplePanel(rightTexture, texSampler, clamp(panelUV - chromaOffset, 0.0, 1.0))).b;
+    color.rgb = float3(red, color.g, blue);
+
+    float scanlines = 0.96 + 0.04 * sin(panelUV.y * 900.0);
+    float vignette = smoothstep(1.35, 0.18, distance(panelUV, float2(0.5)));
+    float grain = vrbCompositorNoise(panelUV * float2(1440.0, 900.0) + in.uv.yx * 37.0);
+    color.rgb *= scanlines;
+    color.rgb = mix(color.rgb, color.rgb + grain * 0.035, 0.45);
+    color.rgb *= vignette;
 
     float dividerDistance = abs(in.uv.x - dividerX);
     float glow = smoothstep(0.012, 0.0, dividerDistance);
